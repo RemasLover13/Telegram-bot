@@ -14,7 +14,7 @@ public class OpenRouterLimitService {
 
     private static final Logger log = LoggerFactory.getLogger(OpenRouterLimitService.class);
 
-    @Value("${spring.ai.openai.api-key:}")
+    @Value("${OPENROUTER_API_KEY:}")
     private String apiKey;
 
     private final RestTemplate restTemplate;
