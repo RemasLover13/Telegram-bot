@@ -18,7 +18,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 @Configuration
 public class OpenRouterConfig {
 
-    @Value("${spring.ai.openai.api-key}")
+    @Value("${OPENROUTER_API_KEY:}")
     private String apiKey;
 
     @Value("${spring.ai.openai.base-url:https://openrouter.ai/api/v1}")

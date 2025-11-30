@@ -235,7 +235,6 @@ public class TelegramBotService extends TelegramLongPollingBot {
         int remaining = rateLimitService.getRemainingAiRequests(userId);
 
         try {
-            // Показываем, что бот думает
             SendMessage thinkingMsg = new SendMessage();
             thinkingMsg.setChatId(String.valueOf(chatId));
             thinkingMsg.setText("🤔 Думаю над ответом... (осталось AI запросов: " + remaining + ")");
@@ -410,13 +409,11 @@ public class TelegramBotService extends TelegramLongPollingBot {
 
         List<KeyboardRow> keyboardRows = new ArrayList<>();
 
-        // Первый ряд
         KeyboardRow keyboardRow = new KeyboardRow();
         keyboardRow.add("🎭 Шутка");
         keyboardRow.add("🤖 AI помощь");
         keyboardRows.add(keyboardRow);
 
-        // Второй ряд
         keyboardRow = new KeyboardRow();
         keyboardRow.add("⏰ Время");
         keyboardRow.add("📊 Лимиты");
@@ -461,16 +458,10 @@ public class TelegramBotService extends TelegramLongPollingBot {
         }
     }
 
-    // Метод для административных уведомлений
     public void sendAdminNotification(String message) {
         if (config.getBotOwner() != null) {
             prepareAndSendMessage(config.getBotOwner(), "🔔 " + message);
         }
     }
 
-    // Планировщик для ежедневного сброса лимитов (уже есть в RateLimitService)
-    @Scheduled(cron = "0 0 0 * * ?")
-    public void dailyResetNotification() {
-        sendAdminNotification("Ежедневный сброс лимитов выполнен. Все пользователи получили 30 AI-запросов.");
-    }
 }
