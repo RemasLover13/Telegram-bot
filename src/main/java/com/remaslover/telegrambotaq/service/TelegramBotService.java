@@ -31,7 +31,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 @Service
-@Transactional(readOnly = true)
 public class TelegramBotService extends TelegramLongPollingBot {
 
     private final TelegramBotConfig config;

@@ -14,22 +14,50 @@ import org.slf4j.LoggerFactory;
 @Component
 public class BotInitializer {
 
-    private final TelegramBotService telegramBotService;
     private static final Logger log = LoggerFactory.getLogger(BotInitializer.class);
 
-    public BotInitializer(TelegramBotService telegramBotService) {
-        this.telegramBotService = telegramBotService;
+    private final TelegramBotService bot;
+
+    public BotInitializer(TelegramBotService bot) {
+        this.bot = bot;
     }
 
     @EventListener(ContextRefreshedEvent.class)
     public void init() {
+        log.info("Initializing Telegram Bot...");
+
+        TelegramBotsApi botsApi;
+        try {
+            botsApi = new TelegramBotsApi(DefaultBotSession.class);
+            botsApi.registerBot(bot);
+            log.info("✅ Bot registered successfully!");
+
+        } catch (TelegramApiException e) {
+            log.error("❌ Failed to register bot: {}", e.getMessage());
+
+            if (e.getMessage().contains("terminated by other getUpdates")) {
+                handleBotConflict();
+            } else {
+                log.error("Other Telegram API error: ", e);
+            }
+        }
+    }
+
+    private void handleBotConflict() {
+        log.warn("🔄 Bot conflict detected. Waiting and retrying...");
 
         try {
-            TelegramBotsApi telegramBotsApi = new TelegramBotsApi(DefaultBotSession.class);
-            telegramBotsApi.registerBot(telegramBotService);
-        } catch (TelegramApiException e) {
-            log.error("Error initializing Bot: {}", e.getMessage());
-        }
+            Thread.sleep(10000);
 
+            TelegramBotsApi retryApi = new TelegramBotsApi(DefaultBotSession.class);
+            retryApi.registerBot(bot);
+            log.info("✅ Bot successfully registered after retry!");
+
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            log.error("Retry interrupted: ", ie);
+        } catch (TelegramApiException e) {
+            log.error("❌ Failed to register bot after retry: {}", e.getMessage());
+        }
     }
 }
