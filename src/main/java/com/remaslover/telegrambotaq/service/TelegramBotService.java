@@ -28,10 +28,7 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 @Service
 @Transactional(readOnly = true)
@@ -107,7 +104,6 @@ public class TelegramBotService extends TelegramLongPollingBot {
     }
 
     @Override
-    @Transactional
     public void onUpdateReceived(Update update) {
         if (update.hasMessage() && update.getMessage().hasText()) {
             String messageText = update.getMessage().getText();
@@ -327,40 +323,33 @@ public class TelegramBotService extends TelegramLongPollingBot {
     @Transactional
     public void registerUser(Message message) {
         long chatId = message.getChatId();
-        Optional<User> existingUserOpt = userRepository.findById(chatId);
 
-        var chat = message.getChat();
-        User user;
+        User user = userRepository.findById(chatId)
+                .map(existingUser -> {
+                    if (!Objects.equals(existingUser.getFirstName(), message.getChat().getFirstName()) ||
+                        !Objects.equals(existingUser.getLastName(), message.getChat().getLastName()) ||
+                        !Objects.equals(existingUser.getUserName(), message.getChat().getUserName())) {
 
-        if (existingUserOpt.isEmpty()) {
-            user = new User();
-            user.setId(chatId);
-            user.setFirstName(chat.getFirstName());
-            user.setLastName(chat.getLastName());
-            user.setUserName(chat.getUserName());
-            user.setRegisteredAt(new Date());
+                        existingUser.setFirstName(message.getChat().getFirstName());
+                        existingUser.setLastName(message.getChat().getLastName());
+                        existingUser.setUserName(message.getChat().getUserName());
+                        existingUser.setRegisteredAt(new Date());
+                        return userRepository.save(existingUser);
+                    }
+                    return existingUser;
+                })
+                .orElseGet(() -> {
+                    var chat = message.getChat();
+                    User newUser = new User();
+                    newUser.setId(chatId);
+                    newUser.setFirstName(chat.getFirstName());
+                    newUser.setLastName(chat.getLastName());
+                    newUser.setUserName(chat.getUserName());
+                    newUser.setRegisteredAt(new Date());
+                    return userRepository.save(newUser);
+                });
 
-            userRepository.save(user);
-            log.info("New user registered: {}", user);
-        } else {
-            user = existingUserOpt.get();
-            if (!user.getFirstName().equals(chat.getFirstName()) ||
-                !user.getLastName().equals(chat.getLastName()) ||
-                !user.getUserName().equals(chat.getUserName())) {
-
-                user.setFirstName(chat.getFirstName());
-                user.setLastName(chat.getLastName());
-                user.setUserName(chat.getUserName());
-                user.setRegisteredAt(new Date());
-
-                try {
-                    userRepository.save(user);
-                    log.info("User data updated: {}", user);
-                } catch (ObjectOptimisticLockingFailureException e) {
-                    log.error("Failed to update user due to optimistic locking failure: {}", e.getMessage());
-                }
-            }
-        }
+        log.debug("User processed: {}", user.getId());
     }
 
     private String formatUserData(User user) {
