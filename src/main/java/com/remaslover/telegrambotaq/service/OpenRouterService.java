@@ -1,107 +1,121 @@
 package com.remaslover.telegrambotaq.service;
 
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.stereotype.Service;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.*;
+import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 @Service
 public class OpenRouterService {
 
     private static final Logger log = LoggerFactory.getLogger(OpenRouterService.class);
 
-    private final ChatClient chatClient;
+    @Value("${OPENROUTER_API_KEY:}")
+    private String apiKey;
 
-    public OpenRouterService(ChatClient chatClient) {
-        this.chatClient = chatClient;
+    @Value("${OPENROUTER_MODEL:google/gemini-2.5-flash}")
+    private String model;
+
+    private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
+
+    public OpenRouterService() {
+        this.restTemplate = new RestTemplate();
+        this.objectMapper = new ObjectMapper();
     }
 
     public String generateResponse(String userMessage) {
         try {
-            return chatClient.prompt()
-                    .system(s -> s.text("""
-                    Ты полезный ассистент в Telegram боте. 
-                    Отвечай на русском языке кратко и понятно.
-                    Будь дружелюбным и помогай пользователям.
-                    Если вопрос неясен или требует уточнения - вежливо попроси уточнить.
-                    Форматируй ответы для лучшей читаемости.
-                    """))
-                    .user(userMessage)
-                    .call()
-                    .content();
+            log.info("Sending request to OpenRouter: {}", userMessage);
+
+            if (apiKey == null || apiKey.isEmpty()) {
+                log.error("OpenRouter API key is not configured");
+                return "❌ API ключ OpenRouter не настроен. Обратитесь к администратору.";
+            }
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set("Authorization", "Bearer " + apiKey);
+            headers.set("HTTP-Referer", "https://t.me/OfficialAnswerToQuestionBot");
+            headers.set("X-Title", "OfficialAnswerToQuestionBot");
+
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("model", model);
+            requestBody.put("messages", List.of(
+                    Map.of("role", "system", "content", """
+                            Ты полезный ассистент в Telegram боте. 
+                            Отвечай на русском языке кратко и понятно.
+                            Будь дружелюбным и помогай пользователям.
+                            Если вопрос неясен или требует уточнения - вежливо попроси уточнить.
+                            Форматируй ответы для лучшей читаемости.
+                            Максимальная длина ответа: 500 символов.
+                            """),
+                    Map.of("role", "user", "content", userMessage)
+            ));
+            requestBody.put("max_tokens", 500);
+            requestBody.put("temperature", 0.7);
+
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
+
+            log.info("Sending HTTP request to OpenRouter with model: {}", model);
+
+            ResponseEntity<String> response = restTemplate.exchange(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    HttpMethod.POST,
+                    entity,
+                    String.class
+            );
+
+            if (response.getStatusCode().is2xxSuccessful()) {
+                JsonNode root = objectMapper.readTree(response.getBody());
+                JsonNode choices = root.path("choices");
+
+                if (choices.isArray() && choices.size() > 0) {
+                    String content = choices.get(0)
+                            .path("message")
+                            .path("content")
+                            .asText();
+
+                    log.info("✅ OpenRouter response received: {} characters", content.length());
+                    return content;
+                } else {
+                    log.error("❌ No choices in OpenRouter response: {}", response.getBody());
+                    return "❌ Ошибка: пустой ответ от AI сервиса";
+                }
+            } else {
+                log.error("❌ OpenRouter API error: {} - {}", response.getStatusCode(), response.getBody());
+                return "❌ Ошибка API OpenRouter: " + response.getStatusCode();
+            }
 
         } catch (Exception e) {
-            log.error("Error generating AI response: {}", e.getMessage());
-            return "Извините, произошла ошибка при обработке запроса. Попробуйте позже.\n\nОшибка: " + e.getMessage();
+            log.error("❌ Error generating AI response: {}", e.getMessage(), e);
+            return handleOpenRouterError(e);
         }
     }
 
-    public String generateResponseWithContext(String userMessage, String context) {
-        try {
-            return chatClient.prompt()
-                    .system(s -> s.text("""
-                    Ты полезный ассистент в Telegram боте. 
-                    Отвечай на русском языке кратко и понятно.
-                    Контекст предыдущего разговора: %s
-                    """.formatted(context)))
-                    .user(userMessage)
-                    .call()
-                    .content();
+    private String handleOpenRouterError(Exception e) {
+        String errorMessage = e.getMessage();
 
-        } catch (Exception e) {
-            log.error("Error generating AI response with context: {}", e.getMessage());
-            return "Извините, произошла ошибка при обработке запроса с контекстом.";
+        if (errorMessage.contains("400") && errorMessage.contains("not a valid model")) {
+            return "❌ Неправильное название модели '" + model + "'. Используйте /models для списка доступных моделей.";
+        } else if (errorMessage.contains("404")) {
+            return "❌ Модель '" + model + "' не найдена. Используйте /models для списка доступных моделей.";
+        } else if (errorMessage.contains("401")) {
+            return "🔑 Неверный API ключ OpenRouter. Проверьте настройки.";
+        } else if (errorMessage.contains("429")) {
+            return "⏳ Превышен лимит запросов. Попробуйте позже.";
+        } else {
+            return "⚠️ Временная ошибка AI сервиса. Попробуйте позже.";
         }
     }
 
-    public String generateCreativeContent(String prompt) {
-        try {
-            return chatClient.prompt()
-                    .system(s -> s.text("""
-                    Ты креативный помощник. Создавай интересный контент на русском языке.
-                    Будь оригинальным, творческим и engaging.
-                    Используй эмодзи где это уместно.
-                    """))
-                    .user(prompt)
-                    .call()
-                    .content();
 
-        } catch (Exception e) {
-            log.error("Error generating creative content: {}", e.getMessage());
-            return "Извините, не удалось сгенерировать креативный контент. Попробуйте позже.";
-        }
-    }
-
-    public String generateJoke(String topic) {
-        try {
-            return chatClient.prompt()
-                    .system(s -> s.text("""
-                    Ты профессиональный комик. Создавай смешные шутки на русском языке.
-                    Шутки должны быть уместными, смешными и оригинальными.
-                    Если тема не указана - придумай шутку на случайную тему.
-                    """))
-                    .user("Придумай шутку на тему: " + topic)
-                    .call()
-                    .content();
-
-        } catch (Exception e) {
-            log.error("Error generating joke: {}", e.getMessage());
-            return "Извините, не удалось придумать шутку. Попробуйте позже.";
-        }
-    }
-
-    // Метод для тестирования подключения
-    public String testConnection() {
-        try {
-            String response = chatClient.prompt()
-                    .user("Ответь кратко: 'Соединение установлено успешно' на русском")
-                    .call()
-                    .content();
-            log.info("OpenRouter connection test successful");
-            return "✅ " + response;
-        } catch (Exception e) {
-            log.error("OpenRouter connection test failed: {}", e.getMessage());
-            return "❌ Ошибка подключения к OpenRouter: " + e.getMessage();
-        }
-    }
 }

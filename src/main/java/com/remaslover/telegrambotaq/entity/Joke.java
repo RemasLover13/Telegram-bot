@@ -3,12 +3,8 @@ package com.remaslover.telegrambotaq.entity;
 
 import jakarta.persistence.*;
 
-@Entity
-@Table(name = "jokes")
 public class Joke {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     private String content;

@@ -2,13 +2,12 @@ package com.remaslover.telegrambotaq.service;
 
 import com.remaslover.telegrambotaq.config.TelegramBotConfig;
 import com.remaslover.telegrambotaq.entity.Button;
-import com.remaslover.telegrambotaq.entity.Joke;
 import com.remaslover.telegrambotaq.entity.User;
-import com.remaslover.telegrambotaq.repository.AdvertisementRepository;
-import com.remaslover.telegrambotaq.repository.JokeRepository;
 import com.remaslover.telegrambotaq.repository.UserRepository;
 import com.remaslover.telegrambotaq.util.JokesParser;
 import com.vdurmont.emoji.EmojiParser;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -34,19 +33,15 @@ import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 @Service
 @Transactional(readOnly = true)
 public class TelegramBotService extends TelegramLongPollingBot {
 
     private final TelegramBotConfig config;
     private final UserRepository userRepository;
-    private final AdvertisementRepository advertisementRepository;
-    private final JokeRepository jokeRepository;
     private final OpenRouterService openRouterService;
     private final RateLimitService rateLimitService;
+    private final OpenRouterLimitService openRouterLimitService;
 
     public static final String HELP_TEXT = """
         🤖 *Доступные команды:*
@@ -56,7 +51,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
         /delete_data - удалить данные
         /time - текущее время
         /joke - случайная шутка
-        /ai - задать вопрос AI (30 запросов/день)
+        /ai - задать вопрос AI (5 запросов/день)
         /usage - мои лимиты
         /credits - остатки на OpenRouter (только для владельца)
         """;
@@ -65,15 +60,12 @@ public class TelegramBotService extends TelegramLongPollingBot {
 
     public TelegramBotService(TelegramBotConfig config,
                               UserRepository userRepository,
-                              AdvertisementRepository advertisementRepository,
-                              JokeRepository jokeRepository,
                               OpenRouterService openRouterService,
-                              RateLimitService rateLimitService
-                             ) {
+                              RateLimitService rateLimitService, OpenRouterLimitService openRouterLimitService
+    ) {
         this.config = config;
         this.userRepository = userRepository;
-        this.advertisementRepository = advertisementRepository;
-        this.jokeRepository = jokeRepository;
+        this.openRouterLimitService = openRouterLimitService;
         this.openRouterService = openRouterService;
         this.rateLimitService = rateLimitService;
 
@@ -83,7 +75,6 @@ public class TelegramBotService extends TelegramLongPollingBot {
     private void initializeBotCommands() {
         List<BotCommand> listOfCommands = new ArrayList<>();
         listOfCommands.add(new BotCommand("/start", "начать работу"));
-        listOfCommands.add(new BotCommand("/settings", "настройки"));
         listOfCommands.add(new BotCommand("/help", "помощь"));
         listOfCommands.add(new BotCommand("/my_data", "мои данные"));
         listOfCommands.add(new BotCommand("/delete_data", "удалить данные"));
@@ -125,7 +116,6 @@ public class TelegramBotService extends TelegramLongPollingBot {
 
             log.info("ChatId: {}, UserId: {}, Message: {}", chatId, userId, messageText);
 
-            // Регистрируем пользователя при любом сообщении
             registerUser(update.getMessage());
 
             if (messageText.contains("/send") && config.getBotOwner().equals(chatId)) {
@@ -157,6 +147,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
                 startCommandReceived(chatId, message.getChat().getFirstName());
                 break;
             case "/help":
+            case "ℹ️ Помощь":
                 prepareAndSendMessage(chatId, HELP_TEXT);
                 break;
             case "/my_data":
@@ -176,24 +167,32 @@ public class TelegramBotService extends TelegramLongPollingBot {
                 }
                 break;
             case "/time":
+            case "⏰ Время":
                 showCurrentTime(chatId);
                 break;
             case "/register":
                 register(chatId);
                 break;
             case "/joke":
+            case "🎭 Шутка":
                 getRandomJoke(chatId);
                 break;
             case "/usage":
+            case "📊 Лимиты":
                 String usageInfo = rateLimitService.getUsageInfo(userId);
                 prepareAndSendMessage(chatId, usageInfo);
                 break;
+            case "🤖 AI помощь":
+                prepareAndSendMessage(chatId, "💡 Напишите ваш вопрос и я отвечу с помощью AI!");
+                break;
             default:
-                // Автоматически отвечаем через AI на любые сообщения
-                handleAiRequest(chatId, userId, messageText);
+                if (!messageText.startsWith("/")) {
+                    handleAiRequest(chatId, userId, messageText);
+                } else {
+                    prepareAndSendMessage(chatId, "❓ Неизвестная команда. Используйте /help для списка команд.");
+                }
         }
     }
-
     private void handleCallbackQuery(Update update) {
         String callbackQuery = update.getCallbackQuery().getData();
         long messageId = update.getCallbackQuery().getMessage().getMessageId();
@@ -210,7 +209,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
 
     private void handleCreditsCommand(long chatId) {
         if (config.getBotOwner().equals(chatId)) {
-            String creditsInfo = rateLimitService.getUsageInfo();
+            String creditsInfo = openRouterLimitService.getUsageInfo();
             prepareAndSendMessage(chatId, creditsInfo);
         } else {
             prepareAndSendMessage(chatId, "❌ Эта команда только для владельца бота");
@@ -225,24 +224,23 @@ public class TelegramBotService extends TelegramLongPollingBot {
             return;
         }
 
-        // Проверка лимита
-        if (!rateLimitService.canMakeRequest(userId)) {
+        // Проверка лимита ТОЛЬКО для AI запросов
+        if (!rateLimitService.canMakeAiRequest(userId)) {
             prepareAndSendMessage(chatId,
-                    "❌ Лимит AI-запросов исчерпан (30/день). Попробуйте завтра!\n" +
+                    "❌ Лимит AI-запросов исчерпан (5/день). Попробуйте завтра!\n" +
                     "Используйте /usage для проверки лимитов");
             return;
         }
 
-        int remaining = rateLimitService.getRemainingRequests(userId);
+        int remaining = rateLimitService.getRemainingAiRequests(userId);
 
         try {
             // Показываем, что бот думает
             SendMessage thinkingMsg = new SendMessage();
             thinkingMsg.setChatId(String.valueOf(chatId));
-            thinkingMsg.setText("🤔 Думаю над ответом... (осталось запросов: " + remaining + ")");
+            thinkingMsg.setText("🤔 Думаю над ответом... (осталось AI запросов: " + remaining + ")");
             execute(thinkingMsg);
 
-            // Генерация ответа через OpenRouter
             String response = openRouterService.generateResponse(question);
             prepareAndSendMessage(chatId, response);
 
@@ -250,7 +248,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
 
         } catch (Exception e) {
             log.error("AI request error for user {}: {}", userId, e.getMessage(), e);
-            prepareAndSendMessage(chatId, "⚠️ Ошибка при обращении к AI. Попробуйте позже.\n\nОшибка: " + e.getMessage());
+            prepareAndSendMessage(chatId, "⚠️ Ошибка при обращении к AI. Попробуйте позже.");
         }
     }
 
@@ -347,7 +345,6 @@ public class TelegramBotService extends TelegramLongPollingBot {
             log.info("New user registered: {}", user);
         } else {
             user = existingUserOpt.get();
-            // Обновляем данные пользователя если они изменились
             if (!user.getFirstName().equals(chat.getFirstName()) ||
                 !user.getLastName().equals(chat.getLastName()) ||
                 !user.getUserName().equals(chat.getUserName())) {
@@ -394,7 +391,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
                 "• Показывать текущее время\n" +
                 "• Рассказывать случайные шутки\n" +
                 "• Хранить ваши данные\n\n" +
-                "🚀 *Доступно 30 AI-запросов в день*\n\n" +
+                "🚀 *Доступно 5 AI-запросов в день*\n\n" +
                 "Просто напишите мне вопрос или используйте /help для списка команд"
         );
         log.info("Start command for user: {}", username);
@@ -453,7 +450,6 @@ public class TelegramBotService extends TelegramLongPollingBot {
         try {
             String jokeFromSites = JokesParser.getJokeFromSites();
             if (jokeFromSites != null && !jokeFromSites.isEmpty()) {
-                jokeRepository.save(new Joke(jokeFromSites));
                 prepareAndSendMessage(chatId, "😂 " + jokeFromSites);
                 log.info("Joke sent to user: {}", chatId);
             } else {
