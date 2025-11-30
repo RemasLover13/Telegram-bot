@@ -1,3 +1,6 @@
+server:
+  port: ${PORT:8080}
+
 spring:
   config:
     import: optional:file:.env[.properties]
@@ -9,11 +12,24 @@ spring:
   jpa:
     show-sql: true
     hibernate:
-      ddl-auto: none
+      ddl-auto: update
+  ai:
+    openai:
+      api-key: ${OPENROUTER_API_KEY}
+      base-url: https://openrouter.ai/api/v1
+      chat:
+        options:
+          model: ${OPENROUTER_MODEL:google/gemini-pro-1.5}
+          temperature: 0.7
+          max-tokens: 800
 
 bot:
   name: ${BOT_NAME}
   token: ${BOT_TOKEN}
   owner: ${BOT_OWNER}
 
-
+app:
+  openrouter:
+    site-url: ${BOT_SITE_URL:https://t.me/OfficialAnswerToQuestionBot}
+    app-name: ${BOT_APP_NAME:OfficialAnswerToQuestionBot}
+    daily-limit: ${DAILY_LIMIT:5}
