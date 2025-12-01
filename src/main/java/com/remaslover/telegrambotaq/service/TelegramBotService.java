@@ -6,12 +6,14 @@ import com.remaslover.telegrambotaq.entity.User;
 import com.remaslover.telegrambotaq.repository.UserRepository;
 import com.remaslover.telegrambotaq.util.JokesParser;
 import com.vdurmont.emoji.EmojiParser;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
+import jakarta.persistence.PersistenceContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
@@ -38,32 +40,39 @@ public class TelegramBotService extends TelegramLongPollingBot {
     private final OpenRouterService openRouterService;
     private final RateLimitService rateLimitService;
     private final OpenRouterLimitService openRouterLimitService;
+    @PersistenceContext
+    private final EntityManager entityManager;
+    private final TransactionTemplate transactionTemplate;
+
 
     public static final String HELP_TEXT = """
-        🤖 *Доступные команды:*
-        /start - начать работу
-        /help - помощь
-        /my_data - мои данные
-        /delete_data - удалить данные
-        /time - текущее время
-        /joke - случайная шутка
-        /ai - задать вопрос AI (5 запросов/день)
-        /usage - мои лимиты
-        /credits - остатки на OpenRouter (только для владельца)
-        """;
+            🤖 *Доступные команды:*
+            /start - начать работу
+            /help - помощь
+            /my_data - мои данные
+            /delete_data - удалить данные
+            /time - текущее время
+            /joke - случайная шутка
+            /ai - задать вопрос AI (5 запросов/день)
+            /usage - мои лимиты
+            /credits - остатки на OpenRouter (только для владельца)
+            """;
 
     private static final Logger log = LoggerFactory.getLogger(TelegramBotService.class);
+
 
     public TelegramBotService(TelegramBotConfig config,
                               UserRepository userRepository,
                               OpenRouterService openRouterService,
-                              RateLimitService rateLimitService, OpenRouterLimitService openRouterLimitService
+                              RateLimitService rateLimitService, OpenRouterLimitService openRouterLimitService, EntityManager entityManager, TransactionTemplate transactionTemplate
     ) {
         this.config = config;
         this.userRepository = userRepository;
         this.openRouterLimitService = openRouterLimitService;
         this.openRouterService = openRouterService;
         this.rateLimitService = rateLimitService;
+        this.entityManager = entityManager;
+        this.transactionTemplate = transactionTemplate;
 
         initializeBotCommands();
     }
@@ -188,6 +197,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
                 }
         }
     }
+
     private void handleCallbackQuery(Update update) {
         String callbackQuery = update.getCallbackQuery().getData();
         long messageId = update.getCallbackQuery().getMessage().getMessageId();
@@ -219,7 +229,6 @@ public class TelegramBotService extends TelegramLongPollingBot {
             return;
         }
 
-        // Проверка лимита ТОЛЬКО для AI запросов
         if (!rateLimitService.canMakeAiRequest(userId)) {
             prepareAndSendMessage(chatId,
                     "❌ Лимит AI-запросов исчерпан (5/день). Попробуйте завтра!\n" +
@@ -319,48 +328,52 @@ public class TelegramBotService extends TelegramLongPollingBot {
         }
     }
 
-    @Transactional
     public void registerUser(Message message) {
-        long chatId = message.getChatId();
+        transactionTemplate.execute(status -> {
+            long chatId = message.getChatId();
 
-        User user = userRepository.findById(chatId)
-                .map(existingUser -> {
-                    if (!Objects.equals(existingUser.getFirstName(), message.getChat().getFirstName()) ||
-                        !Objects.equals(existingUser.getLastName(), message.getChat().getLastName()) ||
-                        !Objects.equals(existingUser.getUserName(), message.getChat().getUserName())) {
+            User user = userRepository.findById(chatId)
+                    .orElseGet(() -> {
+                        var chat = message.getChat();
+                        User newUser = new User();
+                        newUser.setId(chatId);
+                        newUser.setFirstName(chat.getFirstName());
+                        newUser.setLastName(chat.getLastName());
+                        newUser.setUserName(chat.getUserName());
+                        newUser.setRegisteredAt(new Date());
 
-                        existingUser.setFirstName(message.getChat().getFirstName());
-                        existingUser.setLastName(message.getChat().getLastName());
-                        existingUser.setUserName(message.getChat().getUserName());
-                        existingUser.setRegisteredAt(new Date());
-                        return userRepository.save(existingUser);
-                    }
-                    return existingUser;
-                })
-                .orElseGet(() -> {
-                    var chat = message.getChat();
-                    User newUser = new User();
-                    newUser.setId(chatId);
-                    newUser.setFirstName(chat.getFirstName());
-                    newUser.setLastName(chat.getLastName());
-                    newUser.setUserName(chat.getUserName());
-                    newUser.setRegisteredAt(new Date());
-                    return userRepository.save(newUser);
-                });
+                        return userRepository.save(newUser);
+                    });
 
-        log.debug("User processed: {}", user.getId());
+            entityManager.lock(user, LockModeType.PESSIMISTIC_WRITE);
+
+            if (!Objects.equals(user.getFirstName(), message.getChat().getFirstName()) ||
+                !Objects.equals(user.getLastName(), message.getChat().getLastName()) ||
+                !Objects.equals(user.getUserName(), message.getChat().getUserName())) {
+
+                user.setFirstName(message.getChat().getFirstName());
+                user.setLastName(message.getChat().getLastName());
+                user.setUserName(message.getChat().getUserName());
+                user.setRegisteredAt(new Date());
+            }
+
+            userRepository.save(user);
+            log.debug("User processed: {}", user.getId());
+
+            return null;
+        });
     }
 
     private String formatUserData(User user) {
         return """
-            👤 *Ваши данные:*
-            
-            • **ID:** %d
-            • **Имя:** %s
-            • **Фамилия:** %s
-            • **Username:** @%s
-            • **Зарегистрирован:** %s
-            """.formatted(
+                👤 *Ваши данные:*
+                            
+                • **ID:** %d
+                • **Имя:** %s
+                • **Фамилия:** %s
+                • **Username:** @%s
+                • **Зарегистрирован:** %s
+                """.formatted(
                 user.getId(),
                 user.getFirstName() != null ? user.getFirstName() : "Не указано",
                 user.getLastName() != null ? user.getLastName() : "Не указано",

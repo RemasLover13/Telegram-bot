@@ -10,7 +10,6 @@ import java.util.Date;
 public class User {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @Column(name = "first_name")
@@ -27,6 +26,8 @@ public class User {
     @Temporal(TemporalType.TIMESTAMP)
     private Date registeredAt;
 
+
+
     public User(String firstName, String lastName, String userName, Date registeredAt) {
         this.firstName = firstName;
         this.lastName = lastName;
@@ -34,7 +35,8 @@ public class User {
         this.registeredAt = registeredAt;
     }
 
-    public User() {}
+    public User() {
+    }
 
     public Long getId() {
         return id;
