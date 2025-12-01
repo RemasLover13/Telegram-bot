@@ -22,7 +22,7 @@ spring:
   ai:
     openai:
       api-key: ${OPENROUTER_API_KEY}
-      base-url: https://openrouter.ai/api/v1
+      base-url: ${OPENROUTER_BASE_URL}
       chat:
         options:
           model: ${OPENROUTER_MODEL:google/gemini-2.5-flash}

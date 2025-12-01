@@ -21,10 +21,10 @@ public class OpenRouterConfig {
     @Value("${OPENROUTER_API_KEY:}")
     private String apiKey;
 
-    @Value("${spring.ai.openai.base-url:https://openrouter.ai/api/v1}")
+    @Value("${OPENROUTER_BASE_URL:https://openrouter.ai/api/v1}")
     private String baseUrl;
 
-    @Value("${spring.ai.openai.chat.options.model:google/gemini-2.5-flash}")
+    @Value("${OPENROUTER_MODEL:google/gemini-2.5-flash}")
     private String model;
 
     @Bean
