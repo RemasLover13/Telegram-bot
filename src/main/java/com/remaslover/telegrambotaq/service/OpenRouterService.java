@@ -2,6 +2,7 @@ package com.remaslover.telegrambotaq.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.remaslover.telegrambotaq.util.TelegramMarkdownEscapeUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -85,7 +86,11 @@ public class OpenRouterService {
                             .asText();
 
                     log.info("✅ OpenRouter response received: {} characters", content.length());
-                    return content;
+
+                    String escapedContent = TelegramMarkdownEscapeUtil.escapeMarkdown(content);
+                    log.debug("Escaped content length: {}", escapedContent.length());
+
+                    return escapedContent;
                 } else {
                     log.error("❌ No choices in OpenRouter response: {}", response.getBody());
                     return "❌ Ошибка: пустой ответ от AI сервиса";
