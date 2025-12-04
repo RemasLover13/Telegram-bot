@@ -87,9 +87,9 @@ public class OpenRouterService {
 
                     log.info("✅ OpenRouter response received: {} characters", content.length());
 
-                    String escapedContent = TelegramMarkdownEscapeUtil.escapeMarkdown(content);
+                    String escapedContent = TelegramMarkdownEscapeUtil.escapeMarkdownPreserveCode(content);
                     log.debug("Escaped content length: {}", escapedContent.length());
-
+                    
                     return escapedContent;
                 } else {
                     log.error("❌ No choices in OpenRouter response: {}", response.getBody());

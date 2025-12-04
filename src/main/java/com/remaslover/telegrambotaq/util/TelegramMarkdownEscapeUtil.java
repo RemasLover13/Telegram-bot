@@ -5,146 +5,174 @@ import org.springframework.stereotype.Component;
 @Component
 public class TelegramMarkdownEscapeUtil {
     /**
-     * Экранирует все специальные символы Markdown для Telegram
+     * Умное экранирование: сохраняет форматирование кода, экранирует остальное
      */
-    public static String escapeMarkdown(String text) {
+    public static String escapeMarkdownSmart(String text) {
         if (text == null || text.isEmpty()) {
             return "";
         }
 
-        StringBuilder escaped = new StringBuilder();
+        StringBuilder result = new StringBuilder();
+        boolean inCodeBlock = false;
+        boolean inInlineCode = false;
+        int backtickCount = 0;
 
         for (int i = 0; i < text.length(); i++) {
             char c = text.charAt(i);
 
-            if (c == '\\') {
-                escaped.append("\\\\");
+            if (c == '`') {
+                backtickCount++;
+                if (backtickCount == 3) {
+                    inCodeBlock = !inCodeBlock;
+                    backtickCount = 0;
+                    result.append("```");
+                    i += 2; // Пропускаем остальные два `
+                    continue;
+                }
+            } else {
+                backtickCount = 0;
+            }
+
+            if (c == '`' && !inCodeBlock) {
+                inInlineCode = !inInlineCode;
+                result.append(c);
                 continue;
             }
 
-            if (isMarkdownCharacter(c)) {
-                escaped.append('\\');
+            if (inCodeBlock || inInlineCode) {
+                result.append(c);
+                continue;
             }
 
-            escaped.append(c);
+            if (c == '\\') {
+                result.append("\\\\");
+            } else if (c == '_' || c == '*' || c == '[' || c == ']' ||
+                       c == '(' || c == ')' || c == '~') {
+                result.append('\\').append(c);
+            } else if (c == '&') {
+                result.append("&amp;");
+            } else if (c == '<') {
+                result.append("&lt;");
+            } else if (c == '>') {
+                result.append("&gt;");
+            } else {
+                result.append(c);
+            }
         }
 
-        return escaped.toString();
+        return result.toString();
     }
 
     /**
-     * Проверяет, является ли символ специальным для Markdown в Telegram
+     * Альтернативный подход: разбить текст на части и экранировать отдельно
      */
-    public static boolean isMarkdownCharacter(char c) {
-        return c == '_' || c == '*' || c == '[' || c == ']' ||
-               c == '(' || c == ')' || c == '~' || c == '`' ||
-               c == '>' || c == '#' || c == '+' || c == '-' ||
-               c == '=' || c == '|' || c == '{' || c == '}' ||
-               c == '.' || c == '!';
-    }
-
-    /**
-     * Расширенная проверка с учетом большего количества проблемных символов
-     */
-    public static boolean isProblematicCharacter(char c) {
-        if (isMarkdownCharacter(c)) return true;
-
-        return c == '&' || c == '<' || c == '>' || c == '"' || c == '\'' ||
-               c == '@' || c == '^' || c == '%' || c == '$' || c == '\\';
-    }
-
-    /**
-     * Полное экранирование для максимальной безопасности
-     */
-    public static String escapeAll(String text) {
+    public static String escapeMarkdownPreserveCode(String text) {
         if (text == null || text.isEmpty()) {
             return "";
         }
 
-        StringBuilder escaped = new StringBuilder();
+        StringBuilder result = new StringBuilder();
+        String[] parts = text.split("(?=```)|(?<=```)");
+
+        boolean inCodeBlock = false;
+
+        for (String part : parts) {
+            if (part.equals("```")) {
+                inCodeBlock = !inCodeBlock;
+                result.append(part);
+            } else if (inCodeBlock) {
+                result.append(part);
+            } else {
+                result.append(escapeOutsideCodeBlocks(part));
+            }
+        }
+
+        return result.toString();
+    }
+
+    /**
+     * Экранирует текст вне блоков кода, но сохраняет inline код
+     */
+    private static String escapeOutsideCodeBlocks(String text) {
+        StringBuilder result = new StringBuilder();
+        boolean inInlineCode = false;
 
         for (int i = 0; i < text.length(); i++) {
             char c = text.charAt(i);
 
-            switch (c) {
-                case '\\': escaped.append("\\\\"); break;
-                case '_': escaped.append("\\_"); break;
-                case '*': escaped.append("\\*"); break;
-                case '[': escaped.append("\\["); break;
-                case ']': escaped.append("\\]"); break;
-                case '(': escaped.append("\\("); break;
-                case ')': escaped.append("\\)"); break;
-
-                case '~': escaped.append("\\~"); break;
-                case '`': escaped.append("\\`"); break;
-                case '#': escaped.append("\\#"); break;
-                case '+': escaped.append("\\+"); break;
-                case '-': escaped.append("\\-"); break;
-                case '=': escaped.append("\\="); break;
-                case '|': escaped.append("\\|"); break;
-                case '{': escaped.append("\\{"); break;
-                case '}': escaped.append("\\}"); break;
-                case '.': escaped.append("\\."); break;
-                case '!': escaped.append("\\!"); break;
-
-                case '&': escaped.append("&amp;"); break;
-                case '<': escaped.append("&lt;"); break;
-                case '>': escaped.append("&gt;"); break;
-                case '"': escaped.append("&quot;"); break;
-                case '\'': escaped.append("&#39;"); break;
-
-                default:
-                    escaped.append(c);
+            if (c == '`') {
+                if (i + 2 < text.length() &&
+                    text.charAt(i + 1) == '`' &&
+                    text.charAt(i + 2) == '`') {
+                    result.append("```");
+                    i += 2;
+                } else {
+                    inInlineCode = !inInlineCode;
+                    result.append(c);
+                }
+            } else if (inInlineCode) {
+                result.append(c);
+            } else {
+                result.append(escapeBasicMarkdown(c));
             }
         }
 
-        return escaped.toString();
+        return result.toString();
     }
 
-    /**
-     * Безопасная отправка сообщения с автоматическим экранированием
-     */
-    public static String prepareMessage(String text, boolean useMarkdown) {
-        if (!useMarkdown) {
-            return text;
+    private static String escapeBasicMarkdown(char c) {
+        switch (c) {
+            case '\\': return "\\\\";
+            case '_': return "\\_";
+            case '*': return "\\*";
+            case '[': return "\\[";
+            case ']': return "\\]";
+            case '(': return "\\(";
+            case ')': return "\\)";
+            case '~': return "\\~";
+            case '`': return "\\`";
+            case '>': return "\\>";
+            case '#': return "\\#";
+            case '+': return "\\+";
+            case '-': return "\\-";
+            case '=': return "\\=";
+            case '|': return "\\|";
+            case '{': return "\\{";
+            case '}': return "\\}";
+            case '.': return "\\.";
+            case '!': return "\\!";
+            case '&': return "&amp;";
+            case '<': return "&lt;";
+            default: return String.valueOf(c);
         }
-
-        return escapeAll(text);
     }
 
     /**
-     * Проверяет, содержит ли текст потенциально проблемные символы
+     * Упрощенное экранирование только самых проблемных символов
+     * (оставляет * для жирного текста и _ для курсива)
      */
-    public static boolean containsMarkdown(String text) {
+    public static String escapeMinimal(String text) {
         if (text == null || text.isEmpty()) {
-            return false;
+            return "";
         }
 
-        for (char c : text.toCharArray()) {
-            if (isProblematicCharacter(c)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * Логирует проблемные символы для отладки
-     */
-    public static void logProblematicCharacters(String text, String prefix) {
-        if (text == null) return;
-
-        StringBuilder problematic = new StringBuilder();
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            if (isProblematicCharacter(c)) {
-                problematic.append(String.format(" [pos %d: '%c' (0x%04X)]", i, c, (int)c));
-            }
-        }
-
-        if (problematic.length() > 0) {
-            System.out.println(prefix + "Problematic chars: " + problematic.toString());
-        }
+        return text
+                .replace("\\", "\\\\")
+                .replace("[", "\\[")
+                .replace("]", "\\]")
+                .replace("(", "\\(")
+                .replace(")", "\\)")
+                .replace("~", "\\~")
+                .replace("`", "\\`")
+                .replace(">", "\\>")
+                .replace("#", "\\#")
+                .replace("+", "\\+")
+                .replace("-", "\\-")
+                .replace("=", "\\=")
+                .replace("|", "\\|")
+                .replace("{", "\\{")
+                .replace("}", "\\}")
+                .replace(".", "\\.")
+                .replace("!", "\\!");
     }
 }
