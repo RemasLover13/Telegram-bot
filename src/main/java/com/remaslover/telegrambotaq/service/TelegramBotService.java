@@ -1,8 +1,9 @@
 package com.remaslover.telegrambotaq.service;
 
+
 import com.remaslover.telegrambotaq.config.TelegramBotConfig;
-import com.remaslover.telegrambotaq.entity.Button;
 import com.remaslover.telegrambotaq.entity.User;
+import com.remaslover.telegrambotaq.enums.Button;
 import com.remaslover.telegrambotaq.repository.UserRepository;
 import com.remaslover.telegrambotaq.util.JokesParser;
 import com.vdurmont.emoji.EmojiParser;
@@ -40,10 +41,10 @@ public class TelegramBotService extends TelegramLongPollingBot {
     private final OpenRouterService openRouterService;
     private final RateLimitService rateLimitService;
     private final OpenRouterLimitService openRouterLimitService;
+    private final NewsApiService newsApiService;
     @PersistenceContext
     private final EntityManager entityManager;
     private final TransactionTemplate transactionTemplate;
-
 
     public static final String HELP_TEXT = """
             🤖 *Доступные команды:*
@@ -56,21 +57,37 @@ public class TelegramBotService extends TelegramLongPollingBot {
             /ai - задать вопрос AI (5 запросов/день)
             /usage - мои лимиты
             /credits - остатки на OpenRouter (только для владельца)
+                        
+            📰 *Новости:*
+            /topnews [страна] [категория] - главные новости
+            /news_category [категория] - новости по категории
+            /news_country [страна] - новости по стране
+            /news_search [запрос] - поиск новостей
+                        
+            🌍 *Примеры:*
+            /topnews сша технологии
+            /news_category спорт
+            /news_country германия
+            /news_search искусственный интеллект
             """;
 
     private static final Logger log = LoggerFactory.getLogger(TelegramBotService.class);
 
-
     public TelegramBotService(TelegramBotConfig config,
                               UserRepository userRepository,
                               OpenRouterService openRouterService,
-                              RateLimitService rateLimitService, OpenRouterLimitService openRouterLimitService, EntityManager entityManager, TransactionTemplate transactionTemplate
-    ) {
+                              RateLimitService rateLimitService,
+                              OpenRouterLimitService openRouterLimitService,
+                              NewsApiService newsApiService,
+                              EntityManager entityManager,
+                              TransactionTemplate transactionTemplate) {
+        super(config.getBotToken());
         this.config = config;
         this.userRepository = userRepository;
         this.openRouterLimitService = openRouterLimitService;
         this.openRouterService = openRouterService;
         this.rateLimitService = rateLimitService;
+        this.newsApiService = newsApiService;
         this.entityManager = entityManager;
         this.transactionTemplate = transactionTemplate;
 
@@ -88,6 +105,10 @@ public class TelegramBotService extends TelegramLongPollingBot {
         listOfCommands.add(new BotCommand("/ai", "задать вопрос AI"));
         listOfCommands.add(new BotCommand("/usage", "мои лимиты"));
         listOfCommands.add(new BotCommand("/credits", "остатки OpenRouter"));
+        listOfCommands.add(new BotCommand("/topnews", "главные новости"));
+        listOfCommands.add(new BotCommand("/news_category", "новости по категории"));
+        listOfCommands.add(new BotCommand("/news_country", "новости по стране"));
+        listOfCommands.add(new BotCommand("/news_search", "поиск новостей"));
 
         try {
             this.execute(new SetMyCommands(listOfCommands, new BotCommandScopeDefault(), null));
@@ -126,6 +147,14 @@ public class TelegramBotService extends TelegramLongPollingBot {
                 handleBroadcastMessage(messageText);
             } else if (messageText.startsWith("/ai")) {
                 handleAiRequest(chatId, userId, messageText);
+            } else if (messageText.startsWith("/topnews")) {
+                handleTopNewsCommand(chatId, messageText);
+            } else if (messageText.startsWith("/news_category")) {
+                handleNewsCategoryCommand(chatId, messageText);
+            } else if (messageText.startsWith("/news_country")) {
+                handleNewsCountryCommand(chatId, messageText);
+            } else if (messageText.startsWith("/news_search")) {
+                handleNewsSearchCommand(chatId, messageText);
             } else if (messageText.equals("/credits")) {
                 handleCreditsCommand(chatId);
             } else {
@@ -186,6 +215,21 @@ public class TelegramBotService extends TelegramLongPollingBot {
                 String usageInfo = rateLimitService.getUsageInfo(userId);
                 prepareAndSendMessage(chatId, usageInfo);
                 break;
+            case "📰 Новости":
+                showNewsHelp(chatId);
+                break;
+            case "🔥 Главные новости":
+                handleTopNewsCommand(chatId, "/topnews");
+                break;
+            case "🌍 Новости страны":
+                handleNewsCountryCommand(chatId, "/news_country");
+                break;
+            case "📋 Новости категории":
+                handleNewsCategoryCommand(chatId, "/news_category");
+                break;
+            case "🔍 Поиск новостей":
+                handleNewsSearchCommand(chatId, "/news_search");
+                break;
             case "🤖 AI помощь":
                 prepareAndSendMessage(chatId, "💡 Напишите ваш вопрос и я отвечу с помощью AI!");
                 break;
@@ -195,6 +239,180 @@ public class TelegramBotService extends TelegramLongPollingBot {
                 } else {
                     prepareAndSendMessage(chatId, "❓ Неизвестная команда. Используйте /help для списка команд.");
                 }
+        }
+    }
+
+    private void showNewsHelp(long chatId) {
+        String newsHelp = """
+                📰 *Новостные команды:*
+                                
+                • /topnews [страна] [категория] - главные новости
+                • /news_category [категория] - новости по категории
+                • /news_country [страна] - новости по стране
+                • /news_search [запрос] - поиск новостей
+                                
+                🌍 *Примеры:*
+                /topnews сша технологии
+                /news_category спорт
+                /news_country германия
+                /news_search искусственный интеллект
+                                
+                📋 *Доступные категории:*
+                общее, бизнес, развлечения, здоровье, наука, спорт, технологии
+                                
+                🌐 *Доступные страны:*
+                россия, сша, великобритания, германия, франция, китай, украина
+                """;
+        prepareAndSendMessage(chatId, newsHelp);
+    }
+
+    /**
+     * Обработка команды /topnews [страна] [категория]
+     * Примеры:
+     * /topnews - главные новости России
+     * /topnews сша - главные новости США
+     * /topnews сша технологии - технологии в США
+     * /topnews россия спорт - спорт в России
+     */
+    private void handleTopNewsCommand(long chatId, String messageText) {
+        String[] parts = messageText.split(" ");
+
+        try {
+            if (parts.length == 1) {
+                prepareAndSendMessage(chatId, "📡 Получаю главные новости России...");
+                String news = newsApiService.getTopHeadlinesForCountry("Россия", 5);
+                prepareAndSendMessage(chatId, news);
+
+            } else if (parts.length == 2) {
+                String country = parts[1];
+                prepareAndSendMessage(chatId, "📡 Получаю главные новости для " + country + "...");
+                String news = newsApiService.getTopHeadlinesForCountry(country, 5);
+                prepareAndSendMessage(chatId, news);
+
+            } else if (parts.length >= 3) {
+                String country = parts[1];
+                String category = String.join(" ", Arrays.copyOfRange(parts, 2, parts.length));
+                prepareAndSendMessage(chatId, "📡 Получаю новости категории '" + category + "' для " + country + "...");
+                String news = newsApiService.getTopHeadlinesForCountryAndCategory(country, category, 5);
+                prepareAndSendMessage(chatId, news);
+            }
+        } catch (Exception e) {
+            log.error("Error handling top news command: {}", e.getMessage(), e);
+            prepareAndSendMessage(chatId, "⚠️ Ошибка при получении новостей. Попробуйте позже.");
+        }
+    }
+
+    /**
+     * Обработка команды /news_category [категория]
+     * Примеры:
+     * /news_category технологии
+     * /news_category спорт
+     * /news_category бизнес
+     */
+    private void handleNewsCategoryCommand(long chatId, String messageText) {
+        String[] parts = messageText.split(" ");
+
+        if (parts.length == 1) {
+            // Список доступных категорий
+            String categories = """
+                    📋 *Доступные категории новостей:*
+                                        
+                    • общее
+                    • бизнес
+                    • развлечения
+                    • здоровье
+                    • наука
+                    • спорт
+                    • технологии
+                                        
+                    *Использование:* /news_category [категория]
+                    *Пример:* /news_category технологии
+                    """;
+            prepareAndSendMessage(chatId, categories);
+
+        } else {
+            try {
+                String category = String.join(" ", Arrays.copyOfRange(parts, 1, parts.length));
+                prepareAndSendMessage(chatId, "📡 Получаю новости категории '" + category + "'...");
+                String news = newsApiService.getTopHeadlinesForCategory(category, 5);
+                prepareAndSendMessage(chatId, news);
+            } catch (Exception e) {
+                log.error("Error handling news category command: {}", e.getMessage(), e);
+                prepareAndSendMessage(chatId, "⚠️ Ошибка при получении новостей. Проверьте название категории.");
+            }
+        }
+    }
+
+    /**
+     * Обработка команды /news_country [страна]
+     * Примеры:
+     * /news_country сша
+     * /news_country германия
+     * /news_country китай
+     */
+    private void handleNewsCountryCommand(long chatId, String messageText) {
+        String[] parts = messageText.split(" ");
+
+        if (parts.length == 1) {
+            // Список доступных стран
+            String countries = """
+                    🌍 *Доступные страны:*
+                                        
+                    • россия (ru)
+                    • сша (us)
+                    • великобритания (gb)
+                    • германия (de)
+                    • франция (fr)
+                    • китай (cn)
+                    • украина (ua)
+                                        
+                    *Использование:* /news_country [страна]
+                    *Пример:* /news_country сша
+                    """;
+            prepareAndSendMessage(chatId, countries);
+
+        } else {
+            try {
+                String country = String.join(" ", Arrays.copyOfRange(parts, 1, parts.length));
+                prepareAndSendMessage(chatId, "📡 Получаю новости для " + country + "...");
+                String news = newsApiService.getTopHeadlinesForCountry(country, 5);
+                prepareAndSendMessage(chatId, news);
+            } catch (Exception e) {
+                log.error("Error handling news country command: {}", e.getMessage(), e);
+                prepareAndSendMessage(chatId, "⚠️ Ошибка при получении новостей. Проверьте название страны.");
+            }
+        }
+    }
+
+    /**
+     * Обработка команды /news_search [запрос]
+     * Примеры:
+     * /news_search искусственный интеллект
+     * /news_search криптовалюта
+     * /news_search политика
+     */
+    private void handleNewsSearchCommand(long chatId, String messageText) {
+        String[] parts = messageText.split(" ");
+
+        if (parts.length == 1) {
+            prepareAndSendMessage(chatId,
+                    "🔍 *Поиск новостей*\n\n" +
+                    "*Использование:* /news_search [запрос]\n" +
+                    "*Пример:* /news_search искусственный интеллект\n\n" +
+                    "Я найду самые свежие новости по вашему запросу.");
+
+        } else {
+            try {
+                String query = String.join(" ", Arrays.copyOfRange(parts, 1, parts.length));
+                prepareAndSendMessage(chatId, "🔍 Ищу новости по запросу: " + query + "...");
+
+                String news = newsApiService.searchNews(query, 5);
+                prepareAndSendMessage(chatId, news);
+
+            } catch (Exception e) {
+                log.error("Error handling news search command: {}", e.getMessage(), e);
+                prepareAndSendMessage(chatId, "⚠️ Ошибка при поиске новостей. Попробуйте другой запрос.");
+            }
         }
     }
 
@@ -310,7 +528,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
 
     public User getUser(Message message) {
         long chatId = message.getChatId();
-        Optional<User> user = userRepository.findById(chatId);
+        Optional<com.remaslover.telegrambotaq.entity.User> user = userRepository.findById(chatId);
         return user.orElse(null);
     }
 
@@ -390,8 +608,10 @@ public class TelegramBotService extends TelegramLongPollingBot {
                 "• Отвечать на любые вопросы через AI\n" +
                 "• Показывать текущее время\n" +
                 "• Рассказывать случайные шутки\n" +
+                "• Получать актуальные новости 📰\n" +
                 "• Хранить ваши данные\n\n" +
-                "🚀 *Доступно 5 AI-запросов в день*\n\n" +
+                "🚀 *Доступно 5 AI-запросов в день*\n" +
+                "🌍 *Новости из 50+ стран и 7 категорий*\n\n" +
                 "Просто напишите мне вопрос или используйте /help для списка команд"
         );
         log.info("Start command for user: {}", username);
@@ -410,16 +630,23 @@ public class TelegramBotService extends TelegramLongPollingBot {
 
         List<KeyboardRow> keyboardRows = new ArrayList<>();
 
-        KeyboardRow keyboardRow = new KeyboardRow();
-        keyboardRow.add("🎭 Шутка");
-        keyboardRow.add("🤖 AI помощь");
-        keyboardRows.add(keyboardRow);
+        KeyboardRow row1 = new KeyboardRow();
+        row1.add("🎭 Шутка");
+        row1.add("🤖 AI помощь");
+        row1.add("📰 Новости");
+        keyboardRows.add(row1);
 
-        keyboardRow = new KeyboardRow();
-        keyboardRow.add("⏰ Время");
-        keyboardRow.add("📊 Лимиты");
-        keyboardRow.add("ℹ️ Помощь");
-        keyboardRows.add(keyboardRow);
+        KeyboardRow row2 = new KeyboardRow();
+        row2.add("⏰ Время");
+        row2.add("📊 Лимиты");
+        row2.add("ℹ️ Помощь");
+        keyboardRows.add(row2);
+
+        KeyboardRow row3 = new KeyboardRow();
+        row3.add("🌍 Новости страны");
+        row3.add("📋 Новости категории");
+        row3.add("🔥 Главные новости");
+        keyboardRows.add(row3);
 
         keyboardMarkup.setKeyboard(keyboardRows);
         sendMessage.setReplyMarkup(keyboardMarkup);
@@ -464,5 +691,4 @@ public class TelegramBotService extends TelegramLongPollingBot {
             prepareAndSendMessage(config.getBotOwner(), "🔔 " + message);
         }
     }
-
 }

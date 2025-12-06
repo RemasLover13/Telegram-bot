@@ -39,3 +39,14 @@ app:
     site-url: ${BOT_SITE_URL:https://t.me/OfficialAnswerToQuestionBot}
     app-name: ${BOT_APP_NAME:OfficialAnswerToQuestionBot}
     daily-limit: ${DAILY_LIMIT:5}
+
+news:
+  api:
+    key: ${NEWS_API_KEY}
+    top-headlines:
+      default-country: ru
+      default-category: general
+      max-results: 20
+    everything:
+      default-query: technology
+      max-results: 50
