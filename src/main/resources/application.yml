@@ -44,7 +44,7 @@ news:
   api:
     key: ${NEWS_API_KEY}
     top-headlines:
-      default-country: ru
+      default-country: us
       default-category: general
       max-results: 20
     everything:
