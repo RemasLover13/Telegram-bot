@@ -4,17 +4,11 @@ package com.remaslover.telegrambotaq.service;
 import com.remaslover.telegrambotaq.config.TelegramBotConfig;
 import com.remaslover.telegrambotaq.entity.User;
 import com.remaslover.telegrambotaq.enums.Button;
-import com.remaslover.telegrambotaq.repository.UserRepository;
-import com.remaslover.telegrambotaq.util.JokesParser;
+import com.remaslover.telegrambotaq.exception.JokeNotFoundException;
 import com.vdurmont.emoji.EmojiParser;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.LockModeType;
-import jakarta.persistence.PersistenceContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionTemplate;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
@@ -31,20 +25,20 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 @Service
 public class TelegramBotService extends TelegramLongPollingBot {
 
     private final TelegramBotConfig config;
-    private final UserRepository userRepository;
     private final OpenRouterService openRouterService;
     private final RateLimitService rateLimitService;
     private final OpenRouterLimitService openRouterLimitService;
     private final NewsApiService newsApiService;
-    @PersistenceContext
-    private final EntityManager entityManager;
-    private final TransactionTemplate transactionTemplate;
+    private final UserService userService;
+    private final JokerService jokerService;
 
     public static final String HELP_TEXT = """
             🤖 *Доступные команды:*
@@ -74,22 +68,19 @@ public class TelegramBotService extends TelegramLongPollingBot {
     private static final Logger log = LoggerFactory.getLogger(TelegramBotService.class);
 
     public TelegramBotService(TelegramBotConfig config,
-                              UserRepository userRepository,
                               OpenRouterService openRouterService,
                               RateLimitService rateLimitService,
                               OpenRouterLimitService openRouterLimitService,
-                              NewsApiService newsApiService,
-                              EntityManager entityManager,
-                              TransactionTemplate transactionTemplate) {
+                              NewsApiService newsApiService, UserService userService, JokerService jokerService
+    ) {
         super(config.getBotToken());
         this.config = config;
-        this.userRepository = userRepository;
         this.openRouterLimitService = openRouterLimitService;
         this.openRouterService = openRouterService;
         this.rateLimitService = rateLimitService;
         this.newsApiService = newsApiService;
-        this.entityManager = entityManager;
-        this.transactionTemplate = transactionTemplate;
+        this.userService = userService;
+        this.jokerService = jokerService;
 
         initializeBotCommands();
     }
@@ -141,7 +132,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
 
             log.info("ChatId: {}, UserId: {}, Message: {}", chatId, userId, messageText);
 
-            registerUser(update.getMessage());
+            userService.registerUser(update.getMessage());
 
             if (messageText.contains("/send") && config.getBotOwner().equals(chatId)) {
                 handleBroadcastMessage(messageText);
@@ -167,7 +158,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
 
     private void handleBroadcastMessage(String messageText) {
         var textToSend = EmojiParser.parseToUnicode(messageText.substring(messageText.indexOf(" ")));
-        var users = userRepository.findAll();
+        var users = userService.getAllUsers();
         for (var user : users) {
             prepareAndSendMessage(user.getId(), textToSend);
         }
@@ -184,15 +175,15 @@ public class TelegramBotService extends TelegramLongPollingBot {
                 prepareAndSendMessage(chatId, HELP_TEXT);
                 break;
             case "/my_data":
-                User user = getUser(message);
+                User user = userService.getUser(message);
                 if (user != null) {
-                    prepareAndSendMessage(chatId, formatUserData(user));
+                    prepareAndSendMessage(chatId, userService.formatUserData(user));
                 } else {
                     prepareAndSendMessage(chatId, "Пользователь не найден");
                 }
                 break;
             case "/delete_data":
-                boolean isSuccess = deleteUser(message);
+                boolean isSuccess = userService.deleteUser(message);
                 if (isSuccess) {
                     prepareAndSendMessage(chatId, "✅ Данные успешно удалены");
                 } else {
@@ -279,8 +270,8 @@ public class TelegramBotService extends TelegramLongPollingBot {
 
         try {
             if (parts.length == 1) {
-                prepareAndSendMessage(chatId, "📡 Получаю главные новости России...");
-                String news = newsApiService.getTopHeadlinesForCountry("Россия", 5);
+                prepareAndSendMessage(chatId, "📡 Получаю главные новости USA...");
+                String news = newsApiService.getTopHeadlinesForCountry("us", 5);
                 prepareAndSendMessage(chatId, news);
 
             } else if (parts.length == 2) {
@@ -526,80 +517,6 @@ public class TelegramBotService extends TelegramLongPollingBot {
         executeMessage(message);
     }
 
-    public User getUser(Message message) {
-        long chatId = message.getChatId();
-        Optional<com.remaslover.telegrambotaq.entity.User> user = userRepository.findById(chatId);
-        return user.orElse(null);
-    }
-
-    @Transactional
-    public boolean deleteUser(Message message) {
-        long chatId = message.getChatId();
-        Optional<User> user = userRepository.findById(chatId);
-        if (user.isPresent()) {
-            userRepository.delete(user.get());
-            log.info("User deleted: {}", chatId);
-            return true;
-        } else {
-            log.warn("User not found for deletion: {}", chatId);
-            return false;
-        }
-    }
-
-    public void registerUser(Message message) {
-        transactionTemplate.execute(status -> {
-            long chatId = message.getChatId();
-
-            User user = userRepository.findById(chatId)
-                    .orElseGet(() -> {
-                        var chat = message.getChat();
-                        User newUser = new User();
-                        newUser.setId(chatId);
-                        newUser.setFirstName(chat.getFirstName());
-                        newUser.setLastName(chat.getLastName());
-                        newUser.setUserName(chat.getUserName());
-                        newUser.setRegisteredAt(new Date());
-
-                        return userRepository.save(newUser);
-                    });
-
-            entityManager.lock(user, LockModeType.PESSIMISTIC_WRITE);
-
-            if (!Objects.equals(user.getFirstName(), message.getChat().getFirstName()) ||
-                !Objects.equals(user.getLastName(), message.getChat().getLastName()) ||
-                !Objects.equals(user.getUserName(), message.getChat().getUserName())) {
-
-                user.setFirstName(message.getChat().getFirstName());
-                user.setLastName(message.getChat().getLastName());
-                user.setUserName(message.getChat().getUserName());
-                user.setRegisteredAt(new Date());
-            }
-
-            userRepository.save(user);
-            log.debug("User processed: {}", user.getId());
-
-            return null;
-        });
-    }
-
-    private String formatUserData(User user) {
-        return """
-                👤 *Ваши данные:*
-                            
-                • **ID:** %d
-                • **Имя:** %s
-                • **Фамилия:** %s
-                • **Username:** @%s
-                • **Зарегистрирован:** %s
-                """.formatted(
-                user.getId(),
-                user.getFirstName() != null ? user.getFirstName() : "Не указано",
-                user.getLastName() != null ? user.getLastName() : "Не указано",
-                user.getUserName() != null ? user.getUserName() : "Не указано",
-                user.getRegisteredAt().toString()
-        );
-    }
-
     private void startCommandReceived(long chatId, String username) {
         String answer = EmojiParser.parseToUnicode(
                 "Привет, " + username + "! 👋\n\n" +
@@ -670,16 +587,13 @@ public class TelegramBotService extends TelegramLongPollingBot {
         executeMessage(sendMessage);
     }
 
-    @Transactional
     public void getRandomJoke(Long chatId) {
         try {
-            String jokeFromSites = JokesParser.getJokeFromSites();
-            if (jokeFromSites != null && !jokeFromSites.isEmpty()) {
-                prepareAndSendMessage(chatId, "😂 " + jokeFromSites);
-                log.info("Joke sent to user: {}", chatId);
-            } else {
-                prepareAndSendMessage(chatId, "😅 Не удалось получить шутку. Попробуйте ещё раз!");
-            }
+            String joke = jokerService.getJoke();
+            prepareAndSendMessage(chatId, "😂 " + joke);
+            log.info("Joke sent to user: {}", chatId);
+        } catch (JokeNotFoundException e) {
+            prepareAndSendMessage(chatId, "😅 Не удалось получить шутку. Попробуйте ещё раз!");
         } catch (Exception e) {
             log.error("Error getting random joke: {}", e.getMessage(), e);
             prepareAndSendMessage(chatId, "⚠️ Извините, не удалось получить шутку. Попробуйте позже.");
