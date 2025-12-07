@@ -78,13 +78,6 @@ public class NewsApiService {
 
 
     /**
-     * Получает все новости по умолчанию запросу
-     */
-    public NewsDTO getEverything() {
-        return getEverything("technology", 10, "publishedAt");
-    }
-
-    /**
      * Основной метод для получения новостей с заданными параметрами
      *
      * @param query    - ключевые слова для поиска (например: "technology", "apple", "россия")
@@ -178,9 +171,6 @@ public class NewsApiService {
         newsDTO.setTotalResults(0);
         newsDTO.setArticles(new ArticleDTO[0]);
 
-        // Можно добавить поле для ошибки, если оно есть в DTO
-        // newsDTO.setMessage(errorMessage);
-
         return newsDTO;
     }
 
@@ -195,87 +185,6 @@ public class NewsApiService {
         return newsDTO;
     }
 
-    /**
-     * Получение топ новостей по теме (упрощенный метод для Telegram бота)
-     */
-    public String getTopNewsAsString(String topic, int count) {
-        try {
-            NewsDTO news = getEverything(topic, count, "popularity");
-
-            if (news == null || news.getArticles() == null || news.getArticles().length == 0) {
-                return "📰 Новости по теме '" + topic + "' не найдены.";
-            }
-
-            StringBuilder result = new StringBuilder();
-            result.append("📊 *Топ новостей по теме: ").append(topic).append("*\n\n");
-
-            for (int i = 0; i < Math.min(news.getArticles().length, count); i++) {
-                ArticleDTO article = news.getArticles()[i];
-                result.append(i + 1).append(". *").append(article.getTitle()).append("*\n");
-
-                if (article.getDescription() != null && !article.getDescription().isEmpty()) {
-                    result.append("   ").append(article.getDescription()).append("\n");
-                }
-
-                if (article.getUrl() != null) {
-                    result.append("   [Читать полностью](").append(article.getUrl()).append(")\n");
-                }
-
-                result.append("\n");
-            }
-
-            result.append("_Всего найдено: ").append(news.getTotalResults()).append(" статей_");
-
-            return result.toString();
-
-        } catch (Exception e) {
-            log.error("Error formatting news: {}", e.getMessage(), e);
-            return "⚠️ Ошибка при получении новостей. Попробуйте позже.";
-        }
-    }
-
-    /**
-     * Получение последних новостей (сортировка по дате)
-     */
-    public String getLatestNewsAsString(String topic, int count) {
-        NewsDTO news = getEverything(topic, count, "publishedAt");
-        return formatNewsResponse(news, "Последние новости", topic);
-    }
-
-    /**
-     * Форматирование ответа для Telegram
-     */
-    private String formatNewsResponse(NewsDTO news, String header, String topic) {
-        if (news == null || news.getArticles() == null || news.getArticles().length == 0) {
-            return "📰 " + header + " по теме '" + topic + "' не найдены.";
-        }
-
-        StringBuilder sb = new StringBuilder();
-        sb.append("📰 *").append(header).append(": ").append(topic).append("*\n\n");
-
-        for (int i = 0; i < Math.min(news.getArticles().length, 5); i++) { // максимум 5 новостей
-            ArticleDTO article = news.getArticles()[i];
-
-            sb.append("• *").append(escapeMarkdown(article.getTitle())).append("*\n");
-
-            if (article.getSource() != null && article.getSource().getName() != null) {
-                sb.append("  Источник: ").append(article.getSource().getName()).append("\n");
-            }
-
-            if (article.getPublishedAt() != null) {
-                String date = formatDate(article.getPublishedAt());
-                sb.append("  Дата: ").append(date).append("\n");
-            }
-
-            if (article.getUrl() != null) {
-                sb.append("  [Ссылка](").append(article.getUrl()).append(")\n");
-            }
-
-            sb.append("\n");
-        }
-
-        return sb.toString();
-    }
 
     /**
      * Экранирование Markdown для Telegram
@@ -303,26 +212,6 @@ public class NewsApiService {
     }
 
     /**
-     * Форматирование даты для читаемого отображения
-     */
-    private String formatDate(String isoDate) {
-        try {
-            LocalDate date = LocalDate.parse(isoDate.substring(0, 10));
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy");
-            return date.format(formatter);
-        } catch (Exception e) {
-            return isoDate;
-        }
-    }
-
-    /**
-     * Получение топ новостей по умолчанию (Россия, общие новости)
-     */
-    public NewsDTO getTopHeadlines() {
-        return getTopHeadlines("ru", "general", 10, null);
-    }
-
-    /**
      * Основной метод для получения топ новостей
      *
      * @param country  - код страны (ru, us, gb и т.д.)
@@ -341,24 +230,21 @@ public class NewsApiService {
                 return createEmptyResponse("❌ API ключ News API не настроен");
             }
 
-            // Валидация параметров
             if (country == null || country.isEmpty()) {
-                country = "ru"; // Россия по умолчанию
+                country = "us";
             }
 
             if (category == null || category.isEmpty()) {
-                category = "general"; // Общие новости по умолчанию
+                category = "general";
             }
 
             if (pageSize == null || pageSize <= 0) {
-                pageSize = 10; // 10 новостей по умолчанию
+                pageSize = 10;
             }
 
-            // Построение URL
             String url = buildTopHeadlinesUrl(country, category, pageSize, query);
             log.debug("Top headlines request URL: {}", url);
 
-            // Выполнение запроса
             HttpHeaders headers = new HttpHeaders();
             headers.set("User-Agent", "TelegramBot/1.0");
             headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
@@ -406,7 +292,6 @@ public class NewsApiService {
                 .queryParam("pageSize", Math.min(pageSize, 100))
                 .queryParam("apiKey", apiKey);
 
-        // Добавляем поисковый запрос, если он есть
         if (query != null && !query.trim().isEmpty()) {
             builder.queryParam("q", query.trim());
         }
@@ -414,9 +299,6 @@ public class NewsApiService {
         return builder.toUriString();
     }
 
-    /**
-     * ============ HELPER METHODS FOR TELEGRAM ============
-     */
 
     /**
      * Получение топ новостей по стране (для Telegram бота)
@@ -434,8 +316,8 @@ public class NewsApiService {
     public String getTopHeadlinesForCategory(String categoryName, int count) {
         String categoryCode = normalizeCategory(categoryName);
 
-        NewsDTO news = getTopHeadlines("ru", categoryCode, count, null);
-        return formatTopHeadlinesResponse(news, "Россия", categoryName);
+        NewsDTO news = getTopHeadlines("us", categoryCode, count, null);
+        return formatTopHeadlinesResponse(news, "USA", categoryName);
     }
 
     /**

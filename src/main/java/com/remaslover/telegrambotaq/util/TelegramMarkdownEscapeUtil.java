@@ -139,8 +139,6 @@ public class TelegramMarkdownEscapeUtil {
             case '|': return "\\|";
             case '{': return "\\{";
             case '}': return "\\}";
-            case '.': return "\\.";
-            case '!': return "\\!";
             case '&': return "&amp;";
             case '<': return "&lt;";
             default: return String.valueOf(c);
