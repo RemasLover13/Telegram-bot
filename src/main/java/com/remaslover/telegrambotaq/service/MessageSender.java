@@ -1,8 +1,11 @@
 package com.remaslover.telegrambotaq.service;
 
+import com.remaslover.telegrambotaq.config.TelegramBotConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Service;
+import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
@@ -11,12 +14,20 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 @Service
 public class MessageSender {
-    private final TelegramBotService telegramBotService;
+
+    private final ApplicationContext applicationContext;
+    private final TelegramBotConfig botConfig;
 
     private static final Logger log = LoggerFactory.getLogger(MessageSender.class);
 
-    public MessageSender(TelegramBotService telegramBotService) {
-        this.telegramBotService = telegramBotService;
+    public MessageSender(ApplicationContext applicationContext, TelegramBotConfig botConfig) {
+        this.applicationContext = applicationContext;
+        this.botConfig = botConfig;
+    }
+
+    // Получаем бота лениво чтобы избежать цикла
+    private TelegramLongPollingBot getBot() {
+        return applicationContext.getBean(TelegramLongPollingBot.class);
     }
 
     public void sendMessage(long chatId, String text) {
@@ -26,7 +37,7 @@ public class MessageSender {
         sendMessage.setParseMode("Markdown");
 
         try {
-            telegramBotService.execute(sendMessage);
+            getBot().execute(sendMessage);
         } catch (TelegramApiException e) {
             log.error("Error sending message: {}", e.getMessage());
         }
@@ -40,7 +51,7 @@ public class MessageSender {
         sendMessage.setReplyMarkup(keyboard);
 
         try {
-            telegramBotService.execute(sendMessage);
+            getBot().execute(sendMessage);
         } catch (TelegramApiException e) {
             log.error("Error sending message with keyboard: {}", e.getMessage());
         }
@@ -54,7 +65,7 @@ public class MessageSender {
         sendMessage.setReplyMarkup(keyboard);
 
         try {
-            telegramBotService.execute(sendMessage);
+            getBot().execute(sendMessage);
         } catch (TelegramApiException e) {
             log.error("Error sending message with inline keyboard: {}", e.getMessage());
         }
@@ -67,11 +78,9 @@ public class MessageSender {
         message.setMessageId(messageId);
 
         try {
-            telegramBotService.execute(message);
+            getBot().execute(message);
         } catch (TelegramApiException e) {
             log.error("Error editing message: {}", e.getMessage());
         }
     }
-
-
 }

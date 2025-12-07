@@ -24,7 +24,6 @@ public class TelegramBotService extends TelegramLongPollingBot {
 
     private final TelegramBotConfig config;
     private final UserService userService;
-    @Lazy
     private final CommandHandler commandHandler;
     private final KeyboardManager keyboardManager;
     private final MessageSender messageSender;
@@ -102,7 +101,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
         var textToSend = EmojiParser.parseToUnicode(messageText.substring(messageText.indexOf(" ")));
         var users = userService.getAllUsers();
         for (var user : users) {
-            prepareAndSendMessage(user.getId(), textToSend);
+            messageSender.sendMessage(user.getId(), textToSend);
         }
         log.info("Broadcast message sent to {} users", users.size());
     }
@@ -121,20 +120,19 @@ public class TelegramBotService extends TelegramLongPollingBot {
         }
     }
 
-
+    @Deprecated
     public void prepareAndSendMessage(long chatId, String textToSend) {
         messageSender.sendMessage(chatId, textToSend);
     }
 
+    @Deprecated
     public void sendMessageWithKeyboard(long chatId, String textToSend) {
         ReplyKeyboardMarkup keyboard = keyboardManager.createMainKeyboard();
         messageSender.sendMessageWithKeyboard(chatId, textToSend, keyboard);
     }
 
+    @Deprecated
     public void register(long chatId) {
-        String messageText = "Вы хотите зарегистрироваться в системе?";
-        InlineKeyboardMarkup keyboard = keyboardManager.createRegistrationKeyboard();
-        messageSender.sendMessageWithInlineKeyboard(chatId, messageText, keyboard);
+        commandHandler.register(chatId);
     }
-
 }

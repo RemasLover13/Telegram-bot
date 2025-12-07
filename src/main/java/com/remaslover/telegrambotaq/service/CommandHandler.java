@@ -6,10 +6,11 @@ import com.remaslover.telegrambotaq.exception.JokeNotFoundException;
 import com.vdurmont.emoji.EmojiParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Message;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -17,9 +18,6 @@ import java.util.Arrays;
 
 @Component
 public class CommandHandler {
-
-    @Lazy
-    private final TelegramBotService telegramBotService;
     private final UserService userService;
     private final RateLimitService rateLimitService;
     private final JokerService jokerService;
@@ -27,7 +25,8 @@ public class CommandHandler {
     private final OpenRouterService openRouterService;
     private final OpenRouterLimitService openRouterLimitService;
     private final TelegramBotConfig config;
-
+    private final MessageSender messageSender;
+    private final KeyboardManager keyboardManager;
 
     private static final Logger log = LoggerFactory.getLogger(CommandHandler.class);
 
@@ -56,11 +55,17 @@ public class CommandHandler {
             /news_search искусственный интеллект
             """;
 
-    public CommandHandler(TelegramBotService telegramBotService, UserService userService,
-                          RateLimitService rateLimitService, JokerService jokerService,
-                          NewsApiService newsApiService, OpenRouterService openRouterService,
-                          OpenRouterLimitService openRouterLimitService, TelegramBotConfig config) {
-        this.telegramBotService = telegramBotService;
+    public CommandHandler(UserService userService,
+                          RateLimitService rateLimitService,
+                          JokerService jokerService,
+                          NewsApiService newsApiService,
+                          OpenRouterService openRouterService,
+                          OpenRouterLimitService openRouterLimitService,
+                          TelegramBotConfig config,
+                          MessageSender messageSender,
+                          KeyboardManager keyboardManager) {
+        this.messageSender = messageSender;
+        this.keyboardManager = keyboardManager;
         this.userService = userService;
         this.rateLimitService = rateLimitService;
         this.jokerService = jokerService;
@@ -70,6 +75,15 @@ public class CommandHandler {
         this.config = config;
     }
 
+    private void sendMessage(long chatId, String text) {
+        messageSender.sendMessage(chatId, text);
+    }
+
+    private void sendMessageWithKeyboard(long chatId, String text) {
+        ReplyKeyboardMarkup keyboard = keyboardManager.createMainKeyboard();
+        messageSender.sendMessageWithKeyboard(chatId, text, keyboard);
+    }
+
     public void handleRegularCommands(long chatId, Long userId, String messageText, Message message) {
         switch (messageText) {
             case "/start":
@@ -77,7 +91,7 @@ public class CommandHandler {
                 break;
             case "/help":
             case "ℹ️ Помощь":
-                telegramBotService.prepareAndSendMessage(chatId, HELP_TEXT);
+                sendMessage(chatId, HELP_TEXT);
                 break;
             case "/my_data":
                 handleMyDataCommand(chatId, message);
@@ -90,7 +104,7 @@ public class CommandHandler {
                 showCurrentTime(chatId);
                 break;
             case "/register":
-                telegramBotService.register(chatId);
+                register(chatId);
                 break;
             case "/joke":
             case "🎭 Шутка":
@@ -116,13 +130,13 @@ public class CommandHandler {
                 handleNewsSearchCommand(chatId, "/news_search");
                 break;
             case "🤖 AI помощь":
-                telegramBotService.prepareAndSendMessage(chatId, "💡 Напишите ваш вопрос и я отвечу с помощью AI!");
+                sendMessage(chatId, "💡 Напишите ваш вопрос и я отвечу с помощью AI!");
                 break;
             default:
                 if (!messageText.startsWith("/")) {
                     handleAiRequest(chatId, userId, messageText);
                 } else {
-                    telegramBotService.prepareAndSendMessage(chatId, "❓ Неизвестная команда. Используйте /help для списка команд.");
+                    sendMessage(chatId, "❓ Неизвестная команда. Используйте /help для списка команд.");
                 }
         }
     }
@@ -130,43 +144,43 @@ public class CommandHandler {
     private void handleMyDataCommand(long chatId, Message message) {
         User user = userService.getUser(message);
         if (user != null) {
-            telegramBotService.prepareAndSendMessage(chatId, userService.formatUserData(user));
+            sendMessage(chatId, userService.formatUserData(user));
         } else {
-            telegramBotService.prepareAndSendMessage(chatId, "Пользователь не найден");
+            sendMessage(chatId, "Пользователь не найден");
         }
     }
 
     private void handleDeleteDataCommand(long chatId, Message message) {
         boolean isSuccess = userService.deleteUser(message);
         if (isSuccess) {
-            telegramBotService.prepareAndSendMessage(chatId, "✅ Данные успешно удалены");
+            sendMessage(chatId, "✅ Данные успешно удалены");
         } else {
-            telegramBotService.prepareAndSendMessage(chatId, "❌ Ошибка удаления данных");
+            sendMessage(chatId, "❌ Ошибка удаления данных");
         }
     }
 
     private void handleUsageCommand(long chatId, Long userId) {
         String usageInfo = rateLimitService.getUsageInfo(userId);
-        telegramBotService.prepareAndSendMessage(chatId, usageInfo);
+        sendMessage(chatId, usageInfo);
     }
 
     private void showCurrentTime(long chatId) {
         LocalDateTime localDateTime = LocalDateTime.now();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm:ss");
         String formattedTime = localDateTime.format(formatter);
-        telegramBotService.prepareAndSendMessage(chatId, "⏰ Текущее время: " + formattedTime);
+        sendMessage(chatId, "⏰ Текущее время: " + formattedTime);
     }
 
     public void getRandomJoke(Long chatId) {
         try {
             String joke = jokerService.getJoke();
-            telegramBotService.prepareAndSendMessage(chatId, "😂 " + joke);
+            sendMessage(chatId, "😂 " + joke);
             log.info("Joke sent to user: {}", chatId);
         } catch (JokeNotFoundException e) {
-            telegramBotService.prepareAndSendMessage(chatId, "😅 Не удалось получить шутку. Попробуйте ещё раз!");
+            sendMessage(chatId, "😅 Не удалось получить шутку. Попробуйте ещё раз!");
         } catch (Exception e) {
             log.error("Error getting random joke: {}", e.getMessage(), e);
-            telegramBotService.prepareAndSendMessage(chatId, "⚠️ Извините, не удалось получить шутку. Попробуйте позже.");
+            sendMessage(chatId, "⚠️ Извините, не удалось получить шутку. Попробуйте позже.");
         }
     }
 
@@ -191,7 +205,7 @@ public class CommandHandler {
                 🌐 *Доступные страны:*
                 россия, сша, великобритания, германия, франция, китай, украина
                 """;
-        telegramBotService.prepareAndSendMessage(chatId, newsHelp);
+        sendMessage(chatId, newsHelp);
     }
 
     public void handleTopNewsCommand(long chatId, String messageText) {
@@ -199,24 +213,24 @@ public class CommandHandler {
 
         try {
             if (parts.length == 1) {
-                telegramBotService.prepareAndSendMessage(chatId, "📡 Получаю главные новости USA...");
+                sendMessage(chatId, "📡 Получаю главные новости USA...");
                 String news = newsApiService.getTopHeadlinesForCountry("us", 5);
-                telegramBotService.prepareAndSendMessage(chatId, news);
+                sendMessage(chatId, news);
             } else if (parts.length == 2) {
                 String country = parts[1];
-                telegramBotService.prepareAndSendMessage(chatId, "📡 Получаю главные новости для " + country + "...");
+                sendMessage(chatId, "📡 Получаю главные новости для " + country + "...");
                 String news = newsApiService.getTopHeadlinesForCountry(country, 5);
-                telegramBotService.prepareAndSendMessage(chatId, news);
+                sendMessage(chatId, news);
             } else if (parts.length >= 3) {
                 String country = parts[1];
                 String category = String.join(" ", Arrays.copyOfRange(parts, 2, parts.length));
-                telegramBotService.prepareAndSendMessage(chatId, "📡 Получаю новости категории '" + category + "' для " + country + "...");
+                sendMessage(chatId, "📡 Получаю новости категории '" + category + "' для " + country + "...");
                 String news = newsApiService.getTopHeadlinesForCountryAndCategory(country, category, 5);
-                telegramBotService.prepareAndSendMessage(chatId, news);
+                sendMessage(chatId, news);
             }
         } catch (Exception e) {
             log.error("Error handling top news command: {}", e.getMessage(), e);
-            telegramBotService.prepareAndSendMessage(chatId, "⚠️ Ошибка при получении новостей. Попробуйте позже.");
+            sendMessage(chatId, "⚠️ Ошибка при получении новостей. Попробуйте позже.");
         }
     }
 
@@ -238,16 +252,16 @@ public class CommandHandler {
                     *Использование:* /news_category [категория]
                     *Пример:* /news_category технологии
                     """;
-            telegramBotService.prepareAndSendMessage(chatId, categories);
+            sendMessage(chatId, categories);
         } else {
             try {
                 String category = String.join(" ", Arrays.copyOfRange(parts, 1, parts.length));
-                telegramBotService.prepareAndSendMessage(chatId, "📡 Получаю новости категории '" + category + "'...");
+                sendMessage(chatId, "📡 Получаю новости категории '" + category + "'...");
                 String news = newsApiService.getTopHeadlinesForCategory(category, 5);
-                telegramBotService.prepareAndSendMessage(chatId, news);
+                sendMessage(chatId, news);
             } catch (Exception e) {
                 log.error("Error handling news category command: {}", e.getMessage(), e);
-                telegramBotService.prepareAndSendMessage(chatId, "⚠️ Ошибка при получении новостей. Проверьте название категории.");
+                sendMessage(chatId, "⚠️ Ошибка при получении новостей. Проверьте название категории.");
             }
         }
     }
@@ -270,16 +284,16 @@ public class CommandHandler {
                     *Использование:* /news_country [страна]
                     *Пример:* /news_country сша
                     """;
-            telegramBotService.prepareAndSendMessage(chatId, countries);
+            sendMessage(chatId, countries);
         } else {
             try {
                 String country = String.join(" ", Arrays.copyOfRange(parts, 1, parts.length));
-                telegramBotService.prepareAndSendMessage(chatId, "📡 Получаю новости для " + country + "...");
+                sendMessage(chatId, "📡 Получаю новости для " + country + "...");
                 String news = newsApiService.getTopHeadlinesForCountry(country, 5);
-                telegramBotService.prepareAndSendMessage(chatId, news);
+                sendMessage(chatId, news);
             } catch (Exception e) {
                 log.error("Error handling news country command: {}", e.getMessage(), e);
-                telegramBotService.prepareAndSendMessage(chatId, "⚠️ Ошибка при получении новостей. Проверьте название страны.");
+                sendMessage(chatId, "⚠️ Ошибка при получении новостей. Проверьте название страны.");
             }
         }
     }
@@ -288,7 +302,7 @@ public class CommandHandler {
         String[] parts = messageText.split(" ");
 
         if (parts.length == 1) {
-            telegramBotService.prepareAndSendMessage(chatId,
+            sendMessage(chatId,
                     "🔍 *Поиск новостей*\n\n" +
                     "*Использование:* /news_search [запрос]\n" +
                     "*Пример:* /news_search искусственный интеллект\n\n" +
@@ -296,12 +310,12 @@ public class CommandHandler {
         } else {
             try {
                 String query = String.join(" ", Arrays.copyOfRange(parts, 1, parts.length));
-                telegramBotService.prepareAndSendMessage(chatId, "🔍 Ищу новости по запросу: " + query + "...");
+                sendMessage(chatId, "🔍 Ищу новости по запросу: " + query + "...");
                 String news = newsApiService.searchNews(query, 5);
-                telegramBotService.prepareAndSendMessage(chatId, news);
+                sendMessage(chatId, news);
             } catch (Exception e) {
                 log.error("Error handling news search command: {}", e.getMessage(), e);
-                telegramBotService.prepareAndSendMessage(chatId, "⚠️ Ошибка при поиске новостей. Попробуйте другой запрос.");
+                sendMessage(chatId, "⚠️ Ошибка при поиске новостей. Попробуйте другой запрос.");
             }
         }
     }
@@ -310,12 +324,12 @@ public class CommandHandler {
         String question = extractQuestion(messageText);
 
         if (question.isEmpty()) {
-            telegramBotService.prepareAndSendMessage(chatId, "❓ Пожалуйста, введите ваш вопрос");
+            sendMessage(chatId, "❓ Пожалуйста, введите ваш вопрос");
             return;
         }
 
         if (!rateLimitService.canMakeAiRequest(userId)) {
-            telegramBotService.prepareAndSendMessage(chatId,
+            sendMessage(chatId,
                     "❌ Лимит AI-запросов исчерпан (5/день). Попробуйте завтра!\n" +
                     "Используйте /usage для проверки лимитов");
             return;
@@ -324,28 +338,26 @@ public class CommandHandler {
         int remaining = rateLimitService.getRemainingAiRequests(userId);
 
         try {
-            SendMessage thinkingMsg = new SendMessage();
-            thinkingMsg.setChatId(String.valueOf(chatId));
-            thinkingMsg.setText("🤔 Думаю над ответом... (осталось AI запросов: " + remaining + ")");
-            telegramBotService.execute(thinkingMsg);
+            String thinkingText = "🤔 Думаю над ответом... (осталось AI запросов: " + remaining + ")";
+            sendMessage(chatId, thinkingText);
 
             String response = openRouterService.generateResponse(question);
-            telegramBotService.prepareAndSendMessage(chatId, response);
+            sendMessage(chatId, response);
 
             log.info("AI response generated for user {} (remaining: {})", userId, remaining - 1);
 
         } catch (Exception e) {
             log.error("AI request error for user {}: {}", userId, e.getMessage(), e);
-            telegramBotService.prepareAndSendMessage(chatId, "⚠️ Ошибка при обращении к AI. Попробуйте позже.");
+            sendMessage(chatId, "⚠️ Ошибка при обращении к AI. Попробуйте позже.");
         }
     }
 
     public void handleCreditsCommand(long chatId) {
         if (config.getBotOwner().equals(chatId)) {
             String creditsInfo = openRouterLimitService.getUsageInfo();
-            telegramBotService.prepareAndSendMessage(chatId, creditsInfo);
+            sendMessage(chatId, creditsInfo);
         } else {
-            telegramBotService.prepareAndSendMessage(chatId, "❌ Эта команда только для владельца бота");
+            sendMessage(chatId, "❌ Эта команда только для владельца бота");
         }
     }
 
@@ -364,7 +376,13 @@ public class CommandHandler {
                 "Просто напишите мне вопрос или используйте /help для списка команд"
         );
         log.info("Start command for user: {}", username);
-        telegramBotService.sendMessageWithKeyboard(chatId, answer);
+        sendMessageWithKeyboard(chatId, answer);
+    }
+
+    public void register(long chatId) {
+        String messageText = "Вы хотите зарегистрироваться в системе?";
+        InlineKeyboardMarkup keyboard = keyboardManager.createRegistrationKeyboard();
+        messageSender.sendMessageWithInlineKeyboard(chatId, messageText, keyboard);
     }
 
     private String extractQuestion(String messageText) {
