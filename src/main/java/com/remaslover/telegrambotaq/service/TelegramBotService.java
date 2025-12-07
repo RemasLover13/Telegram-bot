@@ -6,6 +6,7 @@ import com.remaslover.telegrambotaq.enums.Button;
 import com.vdurmont.emoji.EmojiParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands;
@@ -23,6 +24,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
 
     private final TelegramBotConfig config;
     private final UserService userService;
+    @Lazy
     private final CommandHandler commandHandler;
     private final KeyboardManager keyboardManager;
     private final MessageSender messageSender;

@@ -6,6 +6,7 @@ import com.remaslover.telegrambotaq.exception.JokeNotFoundException;
 import com.vdurmont.emoji.EmojiParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Message;
@@ -17,6 +18,7 @@ import java.util.Arrays;
 @Component
 public class CommandHandler {
 
+    @Lazy
     private final TelegramBotService telegramBotService;
     private final UserService userService;
     private final RateLimitService rateLimitService;
