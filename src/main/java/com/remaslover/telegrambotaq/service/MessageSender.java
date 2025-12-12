@@ -13,9 +13,6 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMa
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
-import java.util.ArrayList;
-import java.util.List;
-
 @Service
 public class MessageSender {
 
@@ -34,73 +31,50 @@ public class MessageSender {
     }
 
     public void sendMessage(long chatId, String text) {
-        SendMessage sendMessage = new SendMessage();
-        sendMessage.setChatId(String.valueOf(chatId));
-
         try {
-            sendMessage.setText(text);
-            sendMessage.setParseMode("Markdown");
-            getBot().execute(sendMessage);
+            if (!TelegramMarkdownEscapeUtil.isMarkdownSafe(text)) {
+                log.warn("Unsafe markdown detected for chat {}, using plain text", chatId);
+                text = TelegramMarkdownEscapeUtil.escapeForTelegram(text);
+                sendMessageWithParseMode(chatId, text, null);
+                return;
+            }
 
-        } catch (TelegramApiException e) {
-            log.warn("Markdown parsing failed for chat {}: {}", chatId, e.getMessage());
+            SendMessage message = new SendMessage();
+            message.setChatId(String.valueOf(chatId));
+            message.setText(text);
+            message.setParseMode("MarkdownV2");
 
             try {
-                sendMessage.setParseMode(null);
+                getBot().execute(message);
+                log.debug("Message sent to chat {} (length: {})", chatId, text.length());
+            } catch (TelegramApiException e) {
+                log.warn("Markdown failed for chat {}, retrying without formatting: {}",
+                        chatId, e.getMessage());
 
-                String safeText = TelegramMarkdownEscapeUtil.escapeMinimal(text);
-                sendMessage.setText(safeText);
-
-                getBot().execute(sendMessage);
-
-            } catch (TelegramApiException e2) {
-                log.error("Error sending plain message to chat {}: {}", chatId, e2.getMessage());
-
-                try {
-                    String[] chunks = splitMessage(text, 2000);
-                    for (String chunk : chunks) {
-                        SendMessage chunkMessage = new SendMessage();
-                        chunkMessage.setChatId(String.valueOf(chatId));
-                        chunkMessage.setText(chunk);
-                        chunkMessage.setParseMode(null);
-                        getBot().execute(chunkMessage);
-                        Thread.sleep(100);
-                    }
-
-                } catch (Exception e3) {
-                    log.error("All sending attempts failed for chat {}: {}", chatId, e3.getMessage());
-                }
+                String plainText = TelegramMarkdownEscapeUtil.escapeForTelegram(text);
+                sendMessageWithParseMode(chatId, plainText, null);
             }
+
+        } catch (Exception e) {
+            log.error("Failed to send message to chat {}: {}", chatId, e.getMessage(), e);
         }
     }
 
-    private String[] splitMessage(String text, int maxLength) {
-        if (text == null || text.length() <= maxLength) {
-            return new String[]{text};
-        }
+    private void sendMessageWithParseMode(long chatId, String text, String parseMode) {
+        try {
+            SendMessage message = new SendMessage();
+            message.setChatId(String.valueOf(chatId));
+            message.setText(text);
 
-        List<String> parts = new ArrayList<>();
-        int start = 0;
-
-        while (start < text.length()) {
-            int end = Math.min(start + maxLength, text.length());
-
-            if (end < text.length()) {
-                int lastSpace = text.lastIndexOf('\n', end);
-                if (lastSpace > start + maxLength / 2) {
-                    end = lastSpace;
-                }
+            if (parseMode != null) {
+                message.setParseMode(parseMode);
             }
 
-            parts.add(text.substring(start, end));
-            start = end;
-        }
+            getBot().execute(message);
 
-        for (int i = 0; i < parts.size(); i++) {
-            parts.set(i, String.format("(%d/%d)\n%s", i + 1, parts.size(), parts.get(i)));
+        } catch (Exception e) {
+            log.error("Failed to send plain message to chat {}: {}", chatId, e.getMessage());
         }
-
-        return parts.toArray(new String[0]);
     }
 
     public void sendMessageWithKeyboard(long chatId, String text, ReplyKeyboardMarkup keyboard) {

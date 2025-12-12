@@ -373,45 +373,22 @@ public class CommandHandler {
 
                 messageQueueService.enqueueMessage(chatId, notice, 1000);
 
-                messageQueueService.enqueueMessages(chatId,
-                        responseParts.subList(1, responseParts.size()),
-                        2000);
+                for (int i = 1; i < responseParts.size(); i++) {
+                    messageQueueService.enqueueMessage(chatId, responseParts.get(i), 1000 + (i * 1500));
+                }
             }
 
             rateLimitService.registerAiRequest(userId);
 
-            log.info("AI response generated for user {} in {} parts (remaining: {})",
+            log.info("✅ AI response sent for user {} in {} parts (remaining: {})",
                     userId, responseParts.size(), remaining - 1);
 
         } catch (Exception e) {
-            log.error("AI request error for user {}: {}", userId, e.getMessage(), e);
+            log.error("❌ AI request error for user {}: {}", userId, e.getMessage(), e);
             sendMessage(chatId, "⚠️ Ошибка при обращении к AI. Попробуйте позже.");
         }
     }
 
-    /**
-     * Планирует отправку оставшихся частей сообщения
-     */
-    private void scheduleMessageParts(long chatId, List<String> parts, int startIndex) {
-        new Thread(() -> {
-            try {
-                for (int i = startIndex; i < parts.size(); i++) {
-                    Thread.sleep(1500);
-
-                    sendMessage(chatId, parts.get(i));
-
-                    log.debug("Sent part {}/{} to chat {}", i + 1, parts.size(), chatId);
-
-                    if (i < parts.size() - 1) {
-                        Thread.sleep(500);
-                    }
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                log.warn("Message scheduling interrupted for chat {}", chatId);
-            }
-        }).start();
-    }
 
     /**
      * Управление контекстом разговора
@@ -422,14 +399,14 @@ public class CommandHandler {
         if (parts.length == 1) {
             String contextHelp = """
                     🧠 *Управление контекстом разговора:*
-                    
+                                        
                     • `/context clear` - очистить историю разговора
                     • `/context show` - показать историю (безопасный режим)
                     • `/context show_md` - показать историю (с Markdown)
                     • `/context show_debug` - показать историю (для отладки)
                     • `/context stats` - статистика контекста
                     • `/context help` - эта справка
-                    
+                                        
                     *Примечание:* Бот помнит последние 10 сообщений в разговоре
                     Контекст автоматически очищается через 30 минут неактивности
                     """;

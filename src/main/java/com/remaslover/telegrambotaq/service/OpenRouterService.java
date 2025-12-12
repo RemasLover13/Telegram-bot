@@ -120,13 +120,27 @@ public class OpenRouterService {
      * Разбивает длинное сообщение на части для Telegram
      */
     private List<String> splitMessageForTelegram(String text) {
+        try {
+            return telegramMessageSplitter.splitMessageSmart(text);
+
+        } catch (Exception e) {
+            log.error("Error splitting message for Telegram: {}", e.getMessage(), e);
+
+            return splitMessageSimple(text);
+        }
+    }
+
+    /**
+     * Простое разбиение без Markdown (fallback)
+     */
+    private List<String> splitMessageSimple(String text) {
         List<String> parts = new ArrayList<>();
 
         if (text == null || text.isEmpty()) {
             return parts;
         }
 
-        String safeText = TelegramMarkdownEscapeUtil.escapeMarkdownSmart(text);
+        String safeText = TelegramMarkdownEscapeUtil.escapeMinimal(text);
 
         int maxLength = 3500;
 
@@ -136,13 +150,12 @@ public class OpenRouterService {
         }
 
         String[] paragraphs = safeText.split("\n\n");
-
         StringBuilder currentPart = new StringBuilder();
 
         for (String paragraph : paragraphs) {
-            if (currentPart.length() + paragraph.length() + 20 > maxLength && currentPart.length() > 0) {
+            if (currentPart.length() + paragraph.length() + 2 > maxLength &&
+                currentPart.length() > 0) {
                 parts.add(currentPart.toString());
-
                 currentPart = new StringBuilder();
             }
 
@@ -159,107 +172,6 @@ public class OpenRouterService {
         return parts;
     }
 
-    /**
-     * Старый метод для обратной совместимости
-     */
-    public String generateResponse(Long userId, String userMessage) {
-        try {
-            List<String> parts = generateResponseAsParts(userId, userMessage);
-            if (parts.isEmpty()) {
-                return "Пустой ответ от AI";
-            } else if (parts.size() == 1) {
-                return parts.get(0);
-            } else {
-                return parts.get(0) + "\n\n📄 *Продолжение следует в следующем сообщении...*";
-            }
-        } catch (Exception e) {
-            log.error("Error in generateResponse: {}", e.getMessage(), e);
-            return "Ошибка при генерации ответа";
-        }
-    }
-
-    /**
-     * Оценивает общее количество частей
-     */
-    private int estimateTotalParts(String text, int maxLength) {
-        return (int) Math.ceil((double) text.length() / maxLength);
-    }
-
-    /**
-     * Форматирует часть сообщения с нумерацией
-     */
-    private String formatMessagePart(int partNumber, int totalParts, String content) {
-        if (totalParts <= 1) {
-            return content;
-        }
-
-        String header = String.format("📄 *Часть %d из %d:*\n\n", partNumber, totalParts);
-        String footer = String.format("\n\n_Продолжение следует... (%d/%d)_", partNumber, totalParts);
-
-        return header + content + footer;
-    }
-
-    /**
-     * Альтернативный метод разбивки по предложениям
-     */
-    private List<String> splitBySentences(String text, int maxLength) {
-        List<String> parts = new ArrayList<>();
-
-        if (text.length() <= maxLength) {
-            parts.add(text);
-            return parts;
-        }
-
-        String[] sentences = text.split("(?<=[.!?])\\s+");
-
-        StringBuilder currentPart = new StringBuilder();
-
-        for (String sentence : sentences) {
-            if (currentPart.length() + sentence.length() + 1 > maxLength && !currentPart.isEmpty()) {
-                parts.add(currentPart.toString());
-                currentPart = new StringBuilder();
-            }
-
-            if (!currentPart.isEmpty()) {
-                currentPart.append(" ");
-            }
-            currentPart.append(sentence);
-        }
-
-        if (!currentPart.isEmpty()) {
-            parts.add(currentPart.toString());
-        }
-
-        return parts;
-    }
-
-    /**
-     * Разбивает на фиксированные части
-     */
-    private List<String> splitIntoChunks(String text, int chunkSize) {
-        List<String> chunks = new ArrayList<>();
-
-        for (int i = 0; i < text.length(); i += chunkSize) {
-            int end = Math.min(text.length(), i + chunkSize);
-
-            if (end < text.length() && !Character.isWhitespace(text.charAt(end))) {
-                int lastSpace = text.lastIndexOf(' ', end);
-                if (lastSpace > i + chunkSize / 2) {
-                    end = lastSpace;
-                }
-            }
-
-            chunks.add(text.substring(i, end).trim());
-
-            if (end < text.length() && Character.isWhitespace(text.charAt(end))) {
-                i = end;
-            } else {
-                i = end - chunkSize;
-            }
-        }
-
-        return chunks;
-    }
 
     /**
      * Очищает историю разговора для пользователя

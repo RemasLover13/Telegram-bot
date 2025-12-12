@@ -30,40 +30,103 @@ public class TelegramMessageSplitter {
             return parts;
         }
 
-        String safeText = TelegramMarkdownEscapeUtil.escapeMarkdownSmart(text);
+        try {
+            String safeText = escapeMarkdownV2(text);
 
-        if (safeText.length() <= SAFE_MESSAGE_LENGTH) {
-            parts.add(safeText);
-            return parts;
-        }
-
-        List<String> sections = splitBySections(safeText);
-
-        if (sections.size() > 1) {
-            for (String section : sections) {
-                if (section.length() <= SAFE_MESSAGE_LENGTH) {
-                    parts.add(section);
-                } else {
-                    parts.addAll(splitByParagraphs(section));
-                }
+            if (safeText.length() <= SAFE_MESSAGE_LENGTH) {
+                parts.add(safeText);
+                return parts;
             }
-        } else {
-            parts.addAll(splitByParagraphs(safeText));
-        }
 
-        return addNumberingToParts(parts);
+            parts = splitIntoSections(safeText);
+
+            if (parts.isEmpty() || (parts.size() == 1 && parts.get(0).length() > SAFE_MESSAGE_LENGTH)) {
+                parts = splitByParagraphs(safeText);
+            }
+
+            if (parts.size() > 1) {
+                parts = addNumberingToParts(parts);
+            }
+
+            return parts;
+
+        } catch (Exception e) {
+            log.error("Error in splitMessageSmart: {}", e.getMessage());
+
+            return splitMessageSimple(text);
+        }
     }
 
     /**
-     * Разбивает текст по разделам (1., 2., и т.д.)
+     * Экранирование Markdown V2 для Telegram
      */
-    private List<String> splitBySections(String text) {
+    private String escapeMarkdownV2(String text) {
+        if (text == null) return "";
+
+        Pattern codeBlockPattern = Pattern.compile("```(.*?)```", Pattern.DOTALL);
+        Matcher matcher = codeBlockPattern.matcher(text);
+
+        StringBuilder result = new StringBuilder();
+        int lastEnd = 0;
+
+        while (matcher.find()) {
+            result.append(escapeMarkdownBasic(text.substring(lastEnd, matcher.start())));
+
+            result.append(matcher.group(0));
+
+            lastEnd = matcher.end();
+        }
+
+        if (lastEnd < text.length()) {
+            result.append(escapeMarkdownBasic(text.substring(lastEnd)));
+        }
+
+        return result.toString();
+    }
+
+    /**
+     * Базовое экранирование Markdown символов
+     */
+    private String escapeMarkdownBasic(String text) {
+        if (text == null || text.isEmpty()) {
+            return "";
+        }
+
+        char[] specialChars = {'_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'};
+
+        StringBuilder result = new StringBuilder();
+
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            boolean isSpecial = false;
+
+            for (char special : specialChars) {
+                if (c == special) {
+                    isSpecial = true;
+                    break;
+                }
+            }
+
+            if (isSpecial) {
+                result.append('\\');
+            }
+
+            result.append(c);
+        }
+
+        return result.toString();
+    }
+
+    /**
+     * Разбивает текст на логические секции
+     */
+    private List<String> splitIntoSections(String text) {
         List<String> sections = new ArrayList<>();
 
-        Pattern sectionPattern = Pattern.compile("^(\\d+\\.\\s+.*?)(?=(?:^\\d+\\.\\s+|\\z))",
+        Pattern pattern = Pattern.compile("^(\\d+\\.\\s+.*?)(?=(?:^\\d+\\.\\s+|^##\\s+|^#\\s+|^\\*\\*\\*|\\z))",
                 Pattern.MULTILINE | Pattern.DOTALL);
 
-        Matcher matcher = sectionPattern.matcher(text);
+        Matcher matcher = pattern.matcher(text);
         int lastEnd = 0;
 
         while (matcher.find()) {
@@ -119,49 +182,45 @@ public class TelegramMessageSplitter {
     }
 
     /**
-     * Разбивает на фиксированные чанки с учетом слов
+     * Простое разбиение без форматирования (fallback)
      */
-    public List<String> splitIntoChunks(String text, int chunkSize) {
-        List<String> chunks = new ArrayList<>();
-        String safeText = TelegramMarkdownEscapeUtil.escapeMarkdownSmart(text);
+    public List<String> splitMessageSimple(String text) {
+        List<String> parts = new ArrayList<>();
 
+        if (text == null || text.isEmpty()) {
+            return parts;
+        }
+
+        String safeText = text
+                .replace("\\", "\\\\")
+                .replace("_", "\\_")
+                .replace("*", "\\*")
+                .replace("`", "\\`")
+                .replace("[", "\\[")
+                .replace("]", "\\]");
+
+        if (safeText.length() <= SAFE_MESSAGE_LENGTH) {
+            parts.add(safeText);
+            return parts;
+        }
+
+        int chunkSize = SAFE_MESSAGE_LENGTH;
         int totalLength = safeText.length();
-        int start = 0;
-        int partNumber = 1;
-        int totalParts = (int) Math.ceil((double) totalLength / chunkSize);
 
-        while (start < totalLength) {
-            int end = Math.min(start + chunkSize, totalLength);
+        for (int i = 0; i < totalLength; i += chunkSize) {
+            int end = Math.min(i + chunkSize, totalLength);
 
             if (end < totalLength && !Character.isWhitespace(safeText.charAt(end))) {
                 int lastSpace = safeText.lastIndexOf(' ', end);
-                if (lastSpace > start + chunkSize / 2) {
+                if (lastSpace > i + chunkSize / 2) {
                     end = lastSpace;
                 }
             }
 
-            String chunk = safeText.substring(start, end).trim();
-
-            if (totalParts > 1) {
-                chunk = String.format("📄 *Часть %d из %d:*\n\n%s",
-                        partNumber, totalParts, chunk);
-
-                if (partNumber < totalParts) {
-                    chunk += String.format("\n\n_Продолжение... (%d/%d)_", partNumber, totalParts);
-                }
-            }
-
-            chunks.add(chunk);
-            start = end;
-
-            if (start < totalLength && Character.isWhitespace(safeText.charAt(start))) {
-                start++;
-            }
-
-            partNumber++;
+            parts.add(safeText.substring(i, end).trim());
         }
 
-        return chunks;
+        return parts;
     }
 
     /**
@@ -175,35 +234,16 @@ public class TelegramMessageSplitter {
         List<String> numberedParts = new ArrayList<>();
 
         for (int i = 0; i < parts.size(); i++) {
-            String header = String.format("📄 *Часть %d из %d:*\n\n", i + 1, parts.size());
-            String footer = String.format("\n\n_Продолжение следует... (%d/%d)_", i + 1, parts.size());
+            String part = parts.get(i);
 
-            String numberedPart;
-            if (i == parts.size() - 1) {
-                numberedPart = header + parts.get(i);
-            } else {
-                numberedPart = header + parts.get(i) + footer;
+            if (i < parts.size() - 1) {
+                part += String.format("\n\n📄 *Продолжение... (%d/%d)*", i + 1, parts.size());
             }
 
-            numberedParts.add(numberedPart);
+            numberedParts.add(part);
         }
 
         return numberedParts;
     }
 
-    /**
-     * Проверяет, нужно ли разбивать сообщение
-     */
-    public boolean needsSplitting(String text) {
-        if (text == null) return false;
-        return text.length() > SAFE_MESSAGE_LENGTH;
-    }
-
-    /**
-     * Получает количество частей для текста
-     */
-    public int getEstimatedParts(String text) {
-        if (text == null || text.isEmpty()) return 0;
-        return (int) Math.ceil((double) text.length() / SAFE_MESSAGE_LENGTH);
-    }
 }

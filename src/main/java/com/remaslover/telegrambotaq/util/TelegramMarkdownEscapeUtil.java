@@ -1,9 +1,136 @@
 package com.remaslover.telegrambotaq.util;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 @Component
 public class TelegramMarkdownEscapeUtil {
+
+    private static final Logger log = LoggerFactory.getLogger(TelegramMarkdownEscapeUtil.class);
+
+    /**
+     * Проверяет, безопасна ли строка для отправки в Telegram
+     */
+    public static boolean isMarkdownSafe(String text) {
+        if (text == null) return true;
+
+        try {
+            int backtickCount = 0;
+            int starCount = 0;
+            int underscoreCount = 0;
+
+            for (int i = 0; i < text.length(); i++) {
+                char c = text.charAt(i);
+
+                if (c == '`') backtickCount++;
+                if (c == '*') starCount++;
+                if (c == '_') underscoreCount++;
+
+                if (i >= 2 &&
+                    text.charAt(i - 2) == '`' &&
+                    text.charAt(i - 1) == '`' &&
+                    text.charAt(i) == '`') {
+                    i += 2;
+                }
+            }
+
+            if (backtickCount % 3 != 0) {
+                log.warn("Unbalanced backticks: {}", backtickCount);
+                return false;
+            }
+
+            if (text.contains("\\`") && !text.contains("`")) {
+                return false;
+            }
+
+            return true;
+
+        } catch (Exception e) {
+            log.error("Error checking markdown safety: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Упрощенное экранирование для гарантированной безопасности
+     */
+    public static String escapeForTelegram(String text) {
+        if (text == null || text.isEmpty()) {
+            return "";
+        }
+
+        StringBuilder result = new StringBuilder();
+
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+
+            switch (c) {
+                case '\\':
+                    result.append("\\\\");
+                    break;
+                case '_':
+                    result.append("\\_");
+                    break;
+                case '*':
+                    result.append("\\*");
+                    break;
+                case '[':
+                    result.append("\\[");
+                    break;
+                case ']':
+                    result.append("\\]");
+                    break;
+                case '(':
+                    result.append("\\(");
+                    break;
+                case ')':
+                    result.append("\\)");
+                    break;
+                case '~':
+                    result.append("\\~");
+                    break;
+                case '`':
+                    result.append("\\`");
+                    break;
+                case '>':
+                    result.append("\\>");
+                    break;
+                case '#':
+                    result.append("\\#");
+                    break;
+                case '+':
+                    result.append("\\+");
+                    break;
+                case '-':
+                    result.append("\\-");
+                    break;
+                case '=':
+                    result.append("\\=");
+                    break;
+                case '|':
+                    result.append("\\|");
+                    break;
+                case '{':
+                    result.append("\\{");
+                    break;
+                case '}':
+                    result.append("\\}");
+                    break;
+                case '.':
+                    result.append("\\.");
+                    break;
+                case '!':
+                    result.append("\\!");
+                    break;
+                default:
+                    result.append(c);
+            }
+        }
+
+        return result.toString();
+    }
+
     /**
      * Умное экранирование: сохраняет форматирование кода, экранирует остальное
      */
@@ -26,7 +153,7 @@ public class TelegramMarkdownEscapeUtil {
                     inCodeBlock = !inCodeBlock;
                     backtickCount = 0;
                     result.append("```");
-                    i += 2; // Пропускаем остальные два `
+                    i += 2;
                     continue;
                 }
             } else {
@@ -57,63 +184,6 @@ public class TelegramMarkdownEscapeUtil {
                 result.append("&gt;");
             } else {
                 result.append(c);
-            }
-        }
-
-        return result.toString();
-    }
-
-    /**
-     * Альтернативный подход: разбить текст на части и экранировать отдельно
-     */
-    public static String escapeMarkdownPreserveCode(String text) {
-        if (text == null || text.isEmpty()) {
-            return "";
-        }
-
-        StringBuilder result = new StringBuilder();
-        String[] parts = text.split("(?=```)|(?<=```)");
-
-        boolean inCodeBlock = false;
-
-        for (String part : parts) {
-            if (part.equals("```")) {
-                inCodeBlock = !inCodeBlock;
-                result.append(part);
-            } else if (inCodeBlock) {
-                result.append(part);
-            } else {
-                result.append(escapeOutsideCodeBlocks(part));
-            }
-        }
-
-        return result.toString();
-    }
-
-    /**
-     * Экранирует текст вне блоков кода, но сохраняет inline код
-     */
-    private static String escapeOutsideCodeBlocks(String text) {
-        StringBuilder result = new StringBuilder();
-        boolean inInlineCode = false;
-
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-
-            if (c == '`') {
-                if (i + 2 < text.length() &&
-                    text.charAt(i + 1) == '`' &&
-                    text.charAt(i + 2) == '`') {
-                    result.append("```");
-                    i += 2;
-                } else {
-                    inInlineCode = !inInlineCode;
-                    result.append(c);
-                }
-            } else if (inInlineCode) {
-                result.append(c);
-            } else {
-                result.append(escapeBasicMarkdown(c));
             }
         }
 
