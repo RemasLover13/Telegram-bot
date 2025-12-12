@@ -24,7 +24,6 @@ public class ConversationContextService {
     private final Cache<Long, Conversation> conversationCache;
     private final CacheConfig cacheConfig;
 
-    @Autowired
     public ConversationContextService(CacheConfig cacheConfig) {
         this.cacheConfig = cacheConfig;
 

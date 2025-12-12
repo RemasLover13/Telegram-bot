@@ -9,7 +9,6 @@ import java.util.concurrent.TimeUnit;
 
 @Validated
 @Configuration
-@ConfigurationProperties(prefix = "context.cache")
 public class CacheConfig {
     private int maxSize = 1000;
     private int ttlMinutes = 30;
