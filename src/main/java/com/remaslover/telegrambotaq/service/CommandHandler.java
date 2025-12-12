@@ -591,7 +591,7 @@ public class CommandHandler {
                 return;
             }
 
-            sendMessage(chatId, responseParts.get(0));
+            messageSender.sendAiResponse(chatId, responseParts.get(0));
 
             if (responseParts.size() > 1) {
                 String notice = String.format(
@@ -602,6 +602,7 @@ public class CommandHandler {
                 messageQueueService.enqueueMessage(chatId, notice, 1000);
 
                 for (int i = 1; i < responseParts.size(); i++) {
+                    final int partIndex = i;
                     messageQueueService.enqueueMessage(chatId, responseParts.get(i), 1000 + (i * 1500));
                 }
             }

@@ -29,10 +29,8 @@ public class MessageSender {
     public TelegramLongPollingBot getBot() {
         return applicationContext.getBean(TelegramLongPollingBot.class);
     }
-
     /**
      * Основной метод отправки сообщений
-     * Использует упрощенное гарантированно безопасное экранирование
      */
     public void sendMessage(long chatId, String text) {
         try {
@@ -50,10 +48,57 @@ public class MessageSender {
             log.warn("MarkdownV2 failed for chat {}, trying plain text: {}",
                     chatId, e.getMessage());
 
-            sendPlainText(chatId, text);
+            sendAiResponseWithFallback(chatId, text);
 
         } catch (Exception e) {
             log.error("❌ Failed to send message to chat {}: {}", chatId, e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Специальный метод для отправки AI-ответов с fallback
+     */
+    private void sendAiResponseWithFallback(long chatId, String text) {
+        try {
+            String preparedText = TelegramMarkdownEscapeUtil.prepareAiResponse(text);
+
+            SendMessage message = new SendMessage();
+            message.setChatId(String.valueOf(chatId));
+            message.setText(preparedText);
+            message.setParseMode("MarkdownV2");
+
+            getBot().execute(message);
+            log.debug("✅ AI response sent with preparation to chat {}", chatId);
+
+        } catch (Exception e) {
+            log.warn("Prepared AI response failed, sending plain text: {}", e.getMessage());
+
+            sendPlainText(chatId, text);
+        }
+    }
+
+    /**
+     * Специальный метод для отправки AI-ответов
+     */
+    public void sendAiResponse(long chatId, String text) {
+        try {
+            String preparedText = TelegramMarkdownEscapeUtil.prepareAiResponse(text);
+
+            SendMessage message = new SendMessage();
+            message.setChatId(String.valueOf(chatId));
+            message.setText(preparedText);
+            message.setParseMode("MarkdownV2");
+
+            getBot().execute(message);
+            log.debug("✅ AI response sent to chat {} ({} chars)", chatId, text.length());
+
+        } catch (TelegramApiException e) {
+            log.warn("AI response Markdown failed, trying prepared text: {}", e.getMessage());
+
+            sendMessage(chatId, text);
+
+        } catch (Exception e) {
+            log.error("❌ Failed to send AI response to chat {}: {}", chatId, e.getMessage(), e);
         }
     }
 

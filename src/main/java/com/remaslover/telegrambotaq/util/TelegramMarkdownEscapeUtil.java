@@ -1,17 +1,178 @@
 package com.remaslover.telegrambotaq.util;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 @Component
 public class TelegramMarkdownEscapeUtil {
 
-    private static final Logger log = LoggerFactory.getLogger(TelegramMarkdownEscapeUtil.class);
 
     private static final char[] MARKDOWN_V2_SPECIAL_CHARS = {
             '_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'
     };
+
+    /**
+     * Умное экранирование для красивого форматирования:
+     * - Сохраняет блоки кода ```code```
+     * - Сохраняет inline код `code`
+     * - Экранирует только символы вне блоков кода
+     */
+    public static String escapeForTelegram(String text) {
+        if (text == null || text.isEmpty()) {
+            return "";
+        }
+
+        StringBuilder result = new StringBuilder();
+        int i = 0;
+        int length = text.length();
+
+        while (i < length) {
+            char currentChar = text.charAt(i);
+
+            boolean inCodeBlock = isInsideCodeBlock(text, i);
+
+            if (inCodeBlock) {
+                result.append(currentChar);
+                i++;
+                continue;
+            }
+
+            if (currentChar == '`') {
+                result.append(currentChar);
+                i++;
+
+                while (i < length && text.charAt(i) != '`') {
+                    result.append(text.charAt(i));
+                    i++;
+                }
+
+                if (i < length) {
+                    result.append(text.charAt(i));
+                    i++;
+                }
+                continue;
+            }
+
+            switch (currentChar) {
+                case '\\':
+                    result.append("\\\\");
+                    break;
+                case '_':
+                case '*':
+                case '[':
+                case ']':
+                case '(':
+                case ')':
+                case '~':
+                    result.append('\\').append(currentChar);
+                    break;
+                case '&':
+                    result.append("&amp;");
+                    break;
+                case '<':
+                    result.append("&lt;");
+                    break;
+                case '>':
+                    result.append("&gt;");
+                    break;
+                default:
+                    result.append(currentChar);
+            }
+            i++;
+        }
+
+        return result.toString();
+    }
+
+    /**
+     * Проверяет, находится ли позиция внутри блока кода ```
+     */
+    private static boolean isInsideCodeBlock(String text, int position) {
+        int backtickCount = 0;
+        boolean inCodeBlock = false;
+
+        for (int i = 0; i < position; i++) {
+            char c = text.charAt(i);
+
+            if (c == '`') {
+                backtickCount++;
+
+                if (i + 2 < text.length() &&
+                    text.charAt(i + 1) == '`' &&
+                    text.charAt(i + 2) == '`') {
+                    inCodeBlock = !inCodeBlock;
+                    i += 2;
+                    backtickCount += 2;
+                }
+            }
+        }
+
+        return inCodeBlock;
+    }
+
+    /**
+     * Упрощенное экранирование для обычного текста (без кода)
+     */
+    public static String escapePlainText(String text) {
+        if (text == null || text.isEmpty()) {
+            return "";
+        }
+
+        return text
+                .replace("\\", "\\\\")
+                .replace("_", "\\_")
+                .replace("*", "\\*")
+                .replace("[", "\\[")
+                .replace("]", "\\]")
+                .replace("(", "\\(")
+                .replace(")", "\\)")
+                .replace("~", "\\~");
+    }
+
+    /**
+     * Подготовка AI-ответа: очистка лишнего экранирования
+     */
+    public static String prepareAiResponse(String text) {
+        if (text == null || text.isEmpty()) {
+            return "";
+        }
+
+        String cleaned = cleanAiResponse(text);
+
+        return escapeForTelegram(cleaned);
+    }
+
+    /**
+     * Очистка ответа от AI от лишнего экранирования
+     */
+    private static String cleanAiResponse(String text) {
+        if (text == null) return "";
+
+
+        StringBuilder result = new StringBuilder();
+        int i = 0;
+        int length = text.length();
+
+        while (i < length) {
+            char currentChar = text.charAt(i);
+
+            if (currentChar == '\\' && i + 1 < length) {
+                char nextChar = text.charAt(i + 1);
+
+                if (nextChar == '\\' || nextChar == '`' || nextChar == '*') {
+                    result.append(currentChar).append(nextChar);
+                    i += 2;
+                } else {
+                    result.append(nextChar);
+                    i += 2;
+                }
+            } else {
+                result.append(currentChar);
+                i++;
+            }
+        }
+
+        return result.toString();
+    }
 
     /**
      * Улучшенное экранирование для Telegram MarkdownV2
@@ -77,35 +238,6 @@ public class TelegramMarkdownEscapeUtil {
         return count;
     }
 
-    /**
-     * Упрощенное экранирование - гарантированно безопасно
-     */
-    public static String escapeForTelegram(String text) {
-        if (text == null || text.isEmpty()) {
-            return "";
-        }
-
-        return text
-                .replace("\\", "\\\\")
-                .replace("_", "\\_")
-                .replace("*", "\\*")
-                .replace("[", "\\[")
-                .replace("]", "\\]")
-                .replace("(", "\\(")
-                .replace(")", "\\)")
-                .replace("~", "\\~")
-                .replace("`", "\\`")
-                .replace(">", "\\>")
-                .replace("#", "\\#")
-                .replace("+", "\\+")
-                .replace("-", "\\-")
-                .replace("=", "\\=")
-                .replace("|", "\\|")
-                .replace("{", "\\{")
-                .replace("}", "\\}")
-                .replace(".", "\\.")
-                .replace("!", "\\!");
-    }
 
     /**
      * Экранирование для HTML с дополнительной безопасностью
