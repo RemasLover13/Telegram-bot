@@ -9,235 +9,206 @@ public class TelegramMarkdownEscapeUtil {
 
     private static final Logger log = LoggerFactory.getLogger(TelegramMarkdownEscapeUtil.class);
 
-    /**
-     * Проверяет, безопасна ли строка для отправки в Telegram
-     */
-    public static boolean isMarkdownSafe(String text) {
-        if (text == null) return true;
-
-        try {
-            int backtickCount = 0;
-            int starCount = 0;
-            int underscoreCount = 0;
-
-            for (int i = 0; i < text.length(); i++) {
-                char c = text.charAt(i);
-
-                if (c == '`') backtickCount++;
-                if (c == '*') starCount++;
-                if (c == '_') underscoreCount++;
-
-                if (i >= 2 &&
-                    text.charAt(i - 2) == '`' &&
-                    text.charAt(i - 1) == '`' &&
-                    text.charAt(i) == '`') {
-                    i += 2;
-                }
-            }
-
-            if (backtickCount % 3 != 0) {
-                log.warn("Unbalanced backticks: {}", backtickCount);
-                return false;
-            }
-
-            if (text.contains("\\`") && !text.contains("`")) {
-                return false;
-            }
-
-            return true;
-
-        } catch (Exception e) {
-            log.error("Error checking markdown safety: {}", e.getMessage());
-            return false;
-        }
-    }
+    private static final char[] MARKDOWN_V2_SPECIAL_CHARS = {
+            '_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'
+    };
 
     /**
-     * Упрощенное экранирование для гарантированной безопасности
-     */
-    public static String escapeForTelegram(String text) {
-        if (text == null || text.isEmpty()) {
-            return "";
-        }
-
-        StringBuilder result = new StringBuilder();
-
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-
-            switch (c) {
-                case '\\':
-                    result.append("\\\\");
-                    break;
-                case '_':
-                    result.append("\\_");
-                    break;
-                case '*':
-                    result.append("\\*");
-                    break;
-                case '[':
-                    result.append("\\[");
-                    break;
-                case ']':
-                    result.append("\\]");
-                    break;
-                case '(':
-                    result.append("\\(");
-                    break;
-                case ')':
-                    result.append("\\)");
-                    break;
-                case '~':
-                    result.append("\\~");
-                    break;
-                case '`':
-                    result.append("\\`");
-                    break;
-                case '>':
-                    result.append("\\>");
-                    break;
-                case '#':
-                    result.append("\\#");
-                    break;
-                case '+':
-                    result.append("\\+");
-                    break;
-                case '-':
-                    result.append("\\-");
-                    break;
-                case '=':
-                    result.append("\\=");
-                    break;
-                case '|':
-                    result.append("\\|");
-                    break;
-                case '{':
-                    result.append("\\{");
-                    break;
-                case '}':
-                    result.append("\\}");
-                    break;
-                case '.':
-                    result.append("\\.");
-                    break;
-                case '!':
-                    result.append("\\!");
-                    break;
-                default:
-                    result.append(c);
-            }
-        }
-
-        return result.toString();
-    }
-
-    /**
-     * Умное экранирование: сохраняет форматирование кода, экранирует остальное
+     * Умное экранирование MarkdownV2:
+     * - Не экранирует уже экранированные символы
+     * - Сохраняет блоки кода
+     * - Сохраняет существующее форматирование
      */
     public static String escapeMarkdownSmart(String text) {
         if (text == null || text.isEmpty()) {
             return "";
         }
 
+        if (isAlreadyEscaped(text)) {
+            return text;
+        }
+
         StringBuilder result = new StringBuilder();
-        boolean inCodeBlock = false;
-        boolean inInlineCode = false;
-        int backtickCount = 0;
+        int i = 0;
+        int length = text.length();
 
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
+        while (i < length) {
+            char currentChar = text.charAt(i);
 
-            if (c == '`') {
-                backtickCount++;
-                if (backtickCount == 3) {
-                    inCodeBlock = !inCodeBlock;
-                    backtickCount = 0;
+            if (currentChar == '`' && i + 2 < length &&
+                text.charAt(i + 1) == '`' && text.charAt(i + 2) == '`') {
+                result.append("```");
+                i += 3;
+
+                while (i + 2 < length && !(text.charAt(i) == '`' &&
+                                           text.charAt(i + 1) == '`' && text.charAt(i + 2) == '`')) {
+                    result.append(text.charAt(i));
+                    i++;
+                }
+
+                if (i + 2 < length) {
                     result.append("```");
+                    i += 3;
+                }
+                continue;
+            }
+
+            if (currentChar == '`') {
+                result.append('`');
+                i++;
+
+                while (i < length && text.charAt(i) != '`') {
+                    result.append(text.charAt(i));
+                    i++;
+                }
+
+                if (i < length) {
+                    result.append('`');
+                    i++;
+                }
+                continue;
+            }
+
+            if (currentChar == '\\' && i + 1 < length) {
+                char nextChar = text.charAt(i + 1);
+
+                if (isMarkdownSpecialChar(nextChar)) {
+                    result.append('\\').append(nextChar);
                     i += 2;
                     continue;
                 }
+            }
+
+            if (isMarkdownSpecialChar(currentChar)) {
+                if (shouldEscapeChar(text, i)) {
+                    result.append('\\');
+                }
+                result.append(currentChar);
+                i++;
             } else {
-                backtickCount = 0;
-            }
-
-            if (c == '`' && !inCodeBlock) {
-                inInlineCode = !inInlineCode;
-                result.append(c);
-                continue;
-            }
-
-            if (inCodeBlock || inInlineCode) {
-                result.append(c);
-                continue;
-            }
-
-            if (c == '\\') {
-                result.append("\\\\");
-            } else if (c == '_' || c == '*' || c == '[' || c == ']' ||
-                       c == '(' || c == ')' || c == '~') {
-                result.append('\\').append(c);
-            } else if (c == '&') {
-                result.append("&amp;");
-            } else if (c == '<') {
-                result.append("&lt;");
-            } else if (c == '>') {
-                result.append("&gt;");
-            } else {
-                result.append(c);
+                result.append(currentChar);
+                i++;
             }
         }
 
         return result.toString();
     }
 
-    private static String escapeBasicMarkdown(char c) {
-        switch (c) {
-            case '\\':
-                return "\\\\";
-            case '_':
-                return "\\_";
-            case '*':
-                return "\\*";
-            case '[':
-                return "\\[";
-            case ']':
-                return "\\]";
-            case '(':
-                return "\\(";
-            case ')':
-                return "\\)";
-            case '~':
-                return "\\~";
-            case '`':
-                return "\\`";
-            case '>':
-                return "\\>";
-            case '#':
-                return "\\#";
-            case '+':
-                return "\\+";
-            case '-':
-                return "\\-";
-            case '=':
-                return "\\=";
-            case '|':
-                return "\\|";
-            case '{':
-                return "\\{";
-            case '}':
-                return "\\}";
-            case '&':
-                return "&amp;";
-            case '<':
-                return "&lt;";
-            default:
-                return String.valueOf(c);
+    /**
+     * Проверяет, является ли символ специальным для Markdown
+     */
+    private static boolean isMarkdownSpecialChar(char c) {
+        for (char special : MARKDOWN_V2_SPECIAL_CHARS) {
+            if (c == special) {
+                return true;
+            }
         }
+        return false;
     }
 
     /**
-     * Упрощенное экранирование только самых проблемных символов
-     * (оставляет * для жирного текста и _ для курсива)
+     * Проверяет, нужно ли экранировать символ в данной позиции
+     */
+    private static boolean shouldEscapeChar(String text, int position) {
+        char currentChar = text.charAt(position);
+
+        if (position > 0 && text.charAt(position - 1) == '\\') {
+            int backslashCount = 0;
+            int j = position - 1;
+            while (j >= 0 && text.charAt(j) == '\\') {
+                backslashCount++;
+                j--;
+            }
+
+            if (backslashCount % 2 == 1) {
+                return false;
+            }
+        }
+
+
+        if (currentChar == '*') {
+            if (position > 0 && position + 1 < text.length()) {
+                char prev = text.charAt(position - 1);
+                char next = text.charAt(position + 1);
+
+                if (prev == '*' && next == '*') {
+                    return false;
+                }
+            }
+        }
+
+        if (currentChar == '_') {
+            if (position > 0 && position + 1 < text.length()) {
+                char prev = text.charAt(position - 1);
+                char next = text.charAt(position + 1);
+
+                if (prev == '_' && next == '_') {
+                    return false;
+                }
+            }
+        }
+
+        if (currentChar == '.' && (position == text.length() - 1 ||
+                                   Character.isWhitespace(text.charAt(position + 1)))) {
+            return false;
+        }
+
+        if (currentChar == '!' && (position == text.length() - 1 ||
+                                   Character.isWhitespace(text.charAt(position + 1)))) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Проверяет, уже ли правильно экранирован текст
+     */
+    private static boolean isAlreadyEscaped(String text) {
+        int backtickCount = 0;
+        boolean inCodeBlock = false;
+
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+
+            if (c == '`') {
+                backtickCount++;
+
+                if (i + 2 < text.length() && text.charAt(i + 1) == '`' && text.charAt(i + 2) == '`') {
+                    inCodeBlock = !inCodeBlock;
+                    i += 2;
+                    backtickCount += 2;
+                }
+            }
+        }
+
+        if (backtickCount % 2 != 0 && !inCodeBlock) {
+            return false;
+        }
+
+        int bracketBalance = 0;
+        int parenthesisBalance = 0;
+
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+
+            if (c == '[') bracketBalance++;
+            else if (c == ']') bracketBalance--;
+            else if (c == '(') parenthesisBalance++;
+            else if (c == ')') parenthesisBalance--;
+
+            // Если баланс отрицательный - ошибка
+            if (bracketBalance < 0 || parenthesisBalance < 0) {
+                return false;
+            }
+        }
+
+        return bracketBalance == 0 && parenthesisBalance == 0;
+    }
+
+    /**
+     * Минимальное экранирование только самых проблемных символов
+     * Используется для текстов, где не нужно форматирование
      */
     public static String escapeMinimal(String text) {
         if (text == null || text.isEmpty()) {
@@ -253,14 +224,34 @@ public class TelegramMarkdownEscapeUtil {
                 .replace("~", "\\~")
                 .replace("`", "\\`")
                 .replace(">", "\\>")
-                .replace("#", "\\#")
-                .replace("+", "\\+")
-                .replace("-", "\\-")
-                .replace("=", "\\=")
-                .replace("|", "\\|")
-                .replace("{", "\\{")
-                .replace("}", "\\}")
-                .replace(".", "\\.")
-                .replace("!", "\\!");
+                .replace("#", "\\#");
+    }
+
+    /**
+     * Очистка двойного экранирования
+     */
+    public static String cleanDoubleEscaping(String text) {
+        if (text == null) return "";
+
+        return text
+                .replace("\\\\\\*", "\\*")
+                .replace("\\\\\\_", "\\_")
+                .replace("\\\\\\\\", "\\\\")
+                .replace("\\\\#", "\\#")
+                .replace("\\\\`", "\\`")
+                .replace("\\\\>", "\\>")
+                .replace("\\\\~", "\\~")
+                .replace("\\\\[", "\\[")
+                .replace("\\\\]", "\\]")
+                .replace("\\\\(", "\\(")
+                .replace("\\\\)", "\\)")
+                .replace("\\\\+", "\\+")
+                .replace("\\\\-", "\\-")
+                .replace("\\\\=", "\\=")
+                .replace("\\\\|", "\\|")
+                .replace("\\\\{", "\\{")
+                .replace("\\\\}", "\\}")
+                .replace("\\\\.", "\\.")
+                .replace("\\\\!", "\\!");
     }
 }

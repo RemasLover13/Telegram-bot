@@ -1,7 +1,6 @@
 package com.remaslover.telegrambotaq.service;
 
 import com.remaslover.telegrambotaq.config.TelegramBotConfig;
-import com.remaslover.telegrambotaq.util.TelegramMarkdownEscapeUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationContext;
@@ -32,31 +31,29 @@ public class MessageSender {
 
     public void sendMessage(long chatId, String text) {
         try {
-            if (!TelegramMarkdownEscapeUtil.isMarkdownSafe(text)) {
-                log.warn("Unsafe markdown detected for chat {}, using plain text", chatId);
-                text = TelegramMarkdownEscapeUtil.escapeForTelegram(text);
-                sendMessageWithParseMode(chatId, text, null);
-                return;
-            }
-
             SendMessage message = new SendMessage();
             message.setChatId(String.valueOf(chatId));
             message.setText(text);
+
             message.setParseMode("MarkdownV2");
 
             try {
                 getBot().execute(message);
-                log.debug("Message sent to chat {} (length: {})", chatId, text.length());
+                log.debug("✅ Message sent with MarkdownV2 to chat {} ({} chars)",
+                        chatId, text.length());
+
             } catch (TelegramApiException e) {
-                log.warn("Markdown failed for chat {}, retrying without formatting: {}",
+                log.warn("MarkdownV2 failed for chat {}, trying HTML: {}",
                         chatId, e.getMessage());
 
-                String plainText = TelegramMarkdownEscapeUtil.escapeForTelegram(text);
-                sendMessageWithParseMode(chatId, plainText, null);
+                message.setParseMode("HTML");
+                getBot().execute(message);
+                log.debug("✅ Message sent with HTML to chat {}", chatId);
+
             }
 
         } catch (Exception e) {
-            log.error("Failed to send message to chat {}: {}", chatId, e.getMessage(), e);
+            log.error("❌ Failed to send message to chat {}: {}", chatId, e.getMessage(), e);
         }
     }
 

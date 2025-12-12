@@ -1,7 +1,6 @@
 package com.remaslover.telegrambotaq.config;
 
 import com.github.benmanes.caffeine.cache.Caffeine;
-import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.validation.annotation.Validated;
 

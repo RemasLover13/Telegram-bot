@@ -69,8 +69,8 @@ public class MessageQueueService {
     }
 
     /**
-         * Задача отправки сообщения
-         */
-        private record MessageTask(long chatId, String text, int delayMs) {
+     * Задача отправки сообщения
+     */
+    private record MessageTask(long chatId, String text, int delayMs) {
     }
 }
