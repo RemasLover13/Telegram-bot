@@ -81,11 +81,11 @@ public class TelegramBotService extends TelegramLongPollingBot {
                 commandHandler.handleContextCommand(chatId, userId, messageText);
             } else if (messageText.startsWith("/topnews")) {
                 commandHandler.handleTopNewsCommand(chatId, messageText);
-            } else if (messageText.startsWith("/news_category")) {
+            } else if (messageText.startsWith("/news_category") || messageText.startsWith("/newscategory")) {
                 commandHandler.handleNewsCategoryCommand(chatId, messageText);
-            } else if (messageText.startsWith("/news_country")) {
+            } else if (messageText.startsWith("/news_country") || messageText.startsWith("/newscountry")) {
                 commandHandler.handleNewsCountryCommand(chatId, messageText);
-            } else if (messageText.startsWith("/news_search")) {
+            } else if (messageText.startsWith("/news_search") || messageText.startsWith("/newssearch")) {
                 commandHandler.handleNewsSearchCommand(chatId, messageText);
             } else if (messageText.equals("/credits")) {
                 commandHandler.handleCreditsCommand(chatId);

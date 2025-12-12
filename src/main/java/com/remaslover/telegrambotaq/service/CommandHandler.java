@@ -128,7 +128,7 @@ public class CommandHandler {
                 break;
             case "/context":
             case "🧠 Контекст":
-                handleContextCommand(chatId, userId, messageText);
+                showContextMenu(chatId);
                 break;
             case "📰 Новости":
                 showNewsHelp(chatId);
@@ -157,6 +157,98 @@ public class CommandHandler {
         }
     }
 
+    public void handleNewsCategoryCommand(long chatId, String messageText) {
+        String normalizedText = messageText.replace("/newscategory", "/news_category");
+        String[] parts = normalizedText.split(" ");
+
+        if (parts.length == 1) {
+            String categories = """
+                    📋 *Доступные категории новостей:*
+                                        
+                    • общее
+                    • бизнес
+                    • развлечения
+                    • здоровье
+                    • наука
+                    • спорт
+                    • технологии
+                                        
+                    *Использование:* /news_category [категория]
+                    *Пример:* /news_category технологии
+                    *Или:* /newscategory технологии
+                    """;
+            sendMessage(chatId, categories);
+        } else {
+            try {
+                String category = String.join(" ", Arrays.copyOfRange(parts, 1, parts.length));
+                sendMessage(chatId, "📡 Получаю новости категории '" + category + "'...");
+                String news = newsApiService.getTopHeadlinesForCategory(category, 5);
+                sendMessage(chatId, news);
+            } catch (Exception e) {
+                log.error("Error handling news category command: {}", e.getMessage(), e);
+                sendMessage(chatId, "⚠️ Ошибка при получении новостей. Проверьте название категории.");
+            }
+        }
+    }
+
+    public void handleNewsCountryCommand(long chatId, String messageText) {
+        String normalizedText = messageText.replace("/newscountry", "/news_country");
+        String[] parts = normalizedText.split(" ");
+
+        if (parts.length == 1) {
+            String countries = """
+                    🌍 *Доступные страны:*
+                                        
+                    • россия (ru)
+                    • сша (us)
+                    • великобритания (gb)
+                    • германия (de)
+                    • франция (fr)
+                    • китай (cn)
+                    • украина (ua)
+                                        
+                    *Использование:* /news_country [страна]
+                    *Пример:* /news_country сша
+                    *Или:* /newscountry сша
+                    """;
+            sendMessage(chatId, countries);
+        } else {
+            try {
+                String country = String.join(" ", Arrays.copyOfRange(parts, 1, parts.length));
+                sendMessage(chatId, "📡 Получаю новости для " + country + "...");
+                String news = newsApiService.getTopHeadlinesForCountry(country, 5);
+                sendMessage(chatId, news);
+            } catch (Exception e) {
+                log.error("Error handling news country command: {}", e.getMessage(), e);
+                sendMessage(chatId, "⚠️ Ошибка при получении новостей. Проверьте название страны.");
+            }
+        }
+    }
+
+    public void handleNewsSearchCommand(long chatId, String messageText) {
+        String normalizedText = messageText.replace("/newssearch", "/news_search");
+        String[] parts = normalizedText.split(" ");
+
+        if (parts.length == 1) {
+            sendMessage(chatId,
+                    "🔍 *Поиск новостей*\n\n" +
+                    "*Использование:* /news_search [запрос]\n" +
+                    "*Пример:* /news_search искусственный интеллект\n" +
+                    "*Или:* /newssearch искусственный интеллект\n\n" +
+                    "Я найду самые свежие новости по вашему запросу.");
+        } else {
+            try {
+                String query = String.join(" ", Arrays.copyOfRange(parts, 1, parts.length));
+                sendMessage(chatId, "🔍 Ищу новости по запросу: " + query + "...");
+                String news = newsApiService.searchNews(query, 5);
+                sendMessage(chatId, news);
+            } catch (Exception e) {
+                log.error("Error handling news search command: {}", e.getMessage(), e);
+                sendMessage(chatId, "⚠️ Ошибка при поиске новостей. Попробуйте другой запрос.");
+            }
+        }
+    }
+
     /**
      * Обработка callback-запросов от inline клавиатуры
      */
@@ -172,9 +264,8 @@ public class CommandHandler {
             AnswerCallbackQuery answer = new AnswerCallbackQuery();
             answer.setCallbackQueryId(callbackQuery.getId());
 
-            // Если это команда контекста
+
             if (callbackData != null && callbackData.startsWith("/context")) {
-                // Убираем часики и показываем уведомление
                 answer.setText("✅ Обрабатываю команду...");
                 try {
                     messageSender.getBot().execute(answer);
@@ -182,11 +273,11 @@ public class CommandHandler {
                     log.warn("Could not send callback answer: {}", e.getMessage());
                 }
 
-                // Выполняем команду контекста
+
                 handleContextCommand(chatId, userId, callbackData);
 
             } else if (callbackData != null && callbackData.startsWith("/news")) {
-                // Обработка новостных команд
+
                 answer.setText("📰 Получаю новости...");
                 try {
                     messageSender.getBot().execute(answer);
@@ -469,91 +560,6 @@ public class CommandHandler {
         }
     }
 
-    public void handleNewsCategoryCommand(long chatId, String messageText) {
-        String[] parts = messageText.split(" ");
-
-        if (parts.length == 1) {
-            String categories = """
-                    📋 *Доступные категории новостей:*
-                                        
-                    • общее
-                    • бизнес
-                    • развлечения
-                    • здоровье
-                    • наука
-                    • спорт
-                    • технологии
-                                        
-                    *Использование:* /news_category [категория]
-                    *Пример:* /news_category технологии
-                    """;
-            sendMessage(chatId, categories);
-        } else {
-            try {
-                String category = String.join(" ", Arrays.copyOfRange(parts, 1, parts.length));
-                sendMessage(chatId, "📡 Получаю новости категории '" + category + "'...");
-                String news = newsApiService.getTopHeadlinesForCategory(category, 5);
-                sendMessage(chatId, news);
-            } catch (Exception e) {
-                log.error("Error handling news category command: {}", e.getMessage(), e);
-                sendMessage(chatId, "⚠️ Ошибка при получении новостей. Проверьте название категории.");
-            }
-        }
-    }
-
-    public void handleNewsCountryCommand(long chatId, String messageText) {
-        String[] parts = messageText.split(" ");
-
-        if (parts.length == 1) {
-            String countries = """
-                    🌍 *Доступные страны:*
-                                        
-                    • россия (ru)
-                    • сша (us)
-                    • великобритания (gb)
-                    • германия (de)
-                    • франция (fr)
-                    • китай (cn)
-                    • украина (ua)
-                                        
-                    *Использование:* /news_country [страна]
-                    *Пример:* /news_country сша
-                    """;
-            sendMessage(chatId, countries);
-        } else {
-            try {
-                String country = String.join(" ", Arrays.copyOfRange(parts, 1, parts.length));
-                sendMessage(chatId, "📡 Получаю новости для " + country + "...");
-                String news = newsApiService.getTopHeadlinesForCountry(country, 5);
-                sendMessage(chatId, news);
-            } catch (Exception e) {
-                log.error("Error handling news country command: {}", e.getMessage(), e);
-                sendMessage(chatId, "⚠️ Ошибка при получении новостей. Проверьте название страны.");
-            }
-        }
-    }
-
-    public void handleNewsSearchCommand(long chatId, String messageText) {
-        String[] parts = messageText.split(" ");
-
-        if (parts.length == 1) {
-            sendMessage(chatId,
-                    "🔍 *Поиск новостей*\n\n" +
-                    "*Использование:* /news_search [запрос]\n" +
-                    "*Пример:* /news_search искусственный интеллект\n\n" +
-                    "Я найду самые свежие новости по вашему запросу.");
-        } else {
-            try {
-                String query = String.join(" ", Arrays.copyOfRange(parts, 1, parts.length));
-                sendMessage(chatId, "🔍 Ищу новости по запросу: " + query + "...");
-                String news = newsApiService.searchNews(query, 5);
-                sendMessage(chatId, news);
-            } catch (Exception e) {
-                log.error("Error handling news search command: {}", e.getMessage(), e);
-                sendMessage(chatId, "⚠️ Ошибка при поиске новостей. Попробуйте другой запрос.");
-            }
-        }
-    }
 
     /**
      * Обработка AI запросов с разбивкой и очередью
