@@ -5,7 +5,6 @@ import com.github.benmanes.caffeine.cache.RemovalCause;
 import com.remaslover.telegrambotaq.config.CacheConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -141,6 +140,7 @@ public class ConversationContextService {
 
         return sb.toString();
     }
+
 
     /**
      * Очищает историю для конкретного пользователя

@@ -3,6 +3,7 @@ package com.remaslover.telegrambotaq.service;
 import com.remaslover.telegrambotaq.config.TelegramBotConfig;
 import com.remaslover.telegrambotaq.entity.User;
 import com.remaslover.telegrambotaq.exception.JokeNotFoundException;
+import com.remaslover.telegrambotaq.util.TelegramMarkdownEscapeUtil;
 import com.vdurmont.emoji.EmojiParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -375,12 +376,14 @@ public class CommandHandler {
         if (parts.length == 1) {
             String contextHelp = """
                     🧠 *Управление контекстом разговора:*
-                                    
-                    • /context clear - очистить историю разговора
-                    • /context show - показать историю
-                    • /context stats - статистика контекста
-                    • /context help - эта справка
-                                    
+                    
+                    • `/context clear` - очистить историю разговора
+                    • `/context show` - показать историю (безопасный режим)
+                    • `/context show_md` - показать историю (с Markdown)
+                    • `/context show_debug` - показать историю (для отладки)
+                    • `/context stats` - статистика контекста
+                    • `/context help` - эта справка
+                    
                     *Примечание:* Бот помнит последние 10 сообщений в разговоре
                     Контекст автоматически очищается через 30 минут неактивности
                     """;
@@ -397,13 +400,45 @@ public class CommandHandler {
                     break;
 
                 case "show":
-                    String history = openRouterService.getConversationHistory(userId);
-                    sendMessage(chatId, history);
+                    try {
+                        String history = openRouterService.getConversationHistorySimple(userId);
+                        sendMessage(chatId, history);
+                    } catch (Exception e) {
+                        log.error("Error showing context for user {}: {}", userId, e.getMessage());
+                        sendMessage(chatId, "⚠️ Ошибка при получении истории.");
+                    }
+                    break;
+
+                case "show_md":
+                    try {
+                        String history = openRouterService.getConversationHistory(userId);
+                        sendMessage(chatId, history);
+                    } catch (Exception e) {
+                        log.warn("Markdown context failed for user {}, falling back: {}",
+                                userId, e.getMessage());
+                        String history = openRouterService.getConversationHistorySimple(userId);
+                        sendMessage(chatId, history);
+                    }
+                    break;
+
+                case "show_debug":
+                    try {
+                        String history = openRouterService.getConversationHistoryDebug(userId);
+                        sendMessage(chatId, history);
+                    } catch (Exception e) {
+                        log.error("Error showing debug context for user {}: {}", userId, e.getMessage());
+                        sendMessage(chatId, "❌ Ошибка при получении отладочной истории.");
+                    }
                     break;
 
                 case "stats":
-                    String stats = openRouterService.getContextStats();
-                    sendMessage(chatId, stats);
+                    try {
+                        String stats = openRouterService.getContextStats();
+                        sendMessage(chatId, TelegramMarkdownEscapeUtil.escapeMarkdownSmart(stats));
+                    } catch (Exception e) {
+                        log.error("Error showing stats for user {}: {}", userId, e.getMessage());
+                        sendMessage(chatId, "❌ Ошибка при получении статистики.");
+                    }
                     break;
 
                 case "help":
@@ -411,7 +446,7 @@ public class CommandHandler {
                     break;
 
                 default:
-                    sendMessage(chatId, "❓ Неизвестная подкоманда. Используйте /context help");
+                    sendMessage(chatId, "❓ Неизвестная подкоманда. Используйте `/context help`");
             }
         }
     }

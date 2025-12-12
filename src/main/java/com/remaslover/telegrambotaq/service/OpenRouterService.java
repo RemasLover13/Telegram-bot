@@ -126,38 +126,138 @@ public class OpenRouterService {
     }
 
     /**
-     * Получает историю разговора в читаемом формате
+     * Получает историю разговора с правильным экранированием
      */
     public String getConversationHistory(Long userId) {
         List<Map<String, String>> history =
                 conversationContextService.getConversationHistory(userId);
 
         StringBuilder sb = new StringBuilder();
-        sb.append("📜 *История разговора:*\n\n");
 
         if (history.isEmpty()) {
-            sb.append("История пуста");
-        } else {
-            for (Map<String, String> message : history) {
-                String role = message.get("role");
-                String content = message.get("content");
-                String timestamp = message.getOrDefault("timestamp", "");
-
-                String roleEmoji = role.equals("user") ? "👤" : "🤖";
-                String roleText = role.equals("user") ? "Вы" : "Бот";
-
-                String preview = content.length() > 80
-                        ? content.substring(0, 80) + "..."
-                        : content;
-
-                sb.append(roleEmoji)
-                        .append(" *")
-                        .append(roleText)
-                        .append("*: ")
-                        .append(preview.replace("\n", " "))
-                        .append("\n\n");
-            }
+            return "📜 *История разговора:*\n\nИстория пуста";
         }
+
+        sb.append("*📜 История разговора:*\n\n");
+
+        int counter = 1;
+        for (Map<String, String> message : history) {
+            String role = message.get("role");
+            String content = message.get("content");
+
+            String roleEmoji = role.equals("user") ? "👤" : "🤖";
+            String roleText = role.equals("user") ? "Вы" : "Бот";
+
+            String safeContent = TelegramMarkdownEscapeUtil.escapeMarkdownSmart(content);
+
+            String preview;
+            if (safeContent.length() > 100) {
+                preview = safeContent.substring(0, 100) + "...";
+            } else {
+                preview = safeContent;
+            }
+
+            preview = preview.replace("\n", " ");
+
+            sb.append(counter)
+                    .append(". ")
+                    .append(roleEmoji)
+                    .append(" *")
+                    .append(roleText)
+                    .append("*: ")
+                    .append(preview)
+                    .append("\n\n");
+
+            counter++;
+        }
+
+        sb.append("_Всего сообщений: ").append(history.size()).append("_");
+
+        return TelegramMarkdownEscapeUtil.escapeMarkdownSmart(sb.toString());
+    }
+
+    /**
+     * Метод для отладки - показывает в блоке кода
+     */
+    public String getConversationHistoryDebug(Long userId) {
+        List<Map<String, String>> history =
+                conversationContextService.getConversationHistory(userId);
+
+        if (history.isEmpty()) {
+            return "```\nИстория разговора пуста\n```";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("```\n");
+
+        int counter = 1;
+        for (Map<String, String> message : history) {
+            String role = message.get("role");
+            String content = message.get("content");
+
+            String roleText = role.equals("user") ? "[ПОЛЬЗОВАТЕЛЬ]" : "[БОТ]";
+
+            sb.append(counter)
+                    .append(". ")
+                    .append(roleText)
+                    .append(":\n")
+                    .append(content.length() > 60 ? content.substring(0, 60) + "..." : content)
+                    .append("\n")
+                    .append("-".repeat(40))
+                    .append("\n");
+
+            counter++;
+        }
+
+        sb.append("\nВсего: ").append(history.size()).append(" сообщений\n");
+        sb.append("```");
+
+        return sb.toString();
+    }
+
+    /**
+     * Альтернативный безопасный метод (без Markdown)
+     */
+    public String getConversationHistorySimple(Long userId) {
+        List<Map<String, String>> history =
+                conversationContextService.getConversationHistory(userId);
+
+        if (history.isEmpty()) {
+            return "📜 История разговора:\n\nИстория пуста";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("📜 История разговора:\n\n");
+
+        int counter = 1;
+        for (Map<String, String> message : history) {
+            String role = message.get("role");
+            String content = message.get("content");
+
+            String roleText = role.equals("user") ? "👤 Вы" : "🤖 Бот";
+
+            String cleanContent = TelegramMarkdownEscapeUtil.escapeMinimal(content);
+
+            String preview;
+            if (cleanContent.length() > 80) {
+                preview = cleanContent.substring(0, 80) + "...";
+            } else {
+                preview = cleanContent;
+            }
+
+            preview = preview.replace("\n", " ");
+
+            sb.append(counter)
+                    .append(". ")
+                    .append(roleText)
+                    .append(": ")
+                    .append(preview)
+                    .append("\n\n");
+
+            counter++;
+        }
+
+        sb.append("Всего: ").append(history.size()).append(" сообщений");
 
         return sb.toString();
     }
