@@ -3,6 +3,7 @@ package com.remaslover.telegrambotaq.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.remaslover.telegrambotaq.util.TelegramMarkdownEscapeUtil;
+import com.remaslover.telegrambotaq.util.TelegramMessageSplitter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -10,6 +11,7 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,23 +30,25 @@ public class OpenRouterService {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final ConversationContextService conversationContextService;
+    private final TelegramMessageSplitter telegramMessageSplitter;
 
-    public OpenRouterService(ConversationContextService conversationContextService) {
+    public OpenRouterService(ConversationContextService conversationContextService, TelegramMessageSplitter telegramMessageSplitter) {
+        this.telegramMessageSplitter = telegramMessageSplitter;
         this.restTemplate = new RestTemplate();
         this.objectMapper = new ObjectMapper();
         this.conversationContextService = conversationContextService;
     }
 
     /**
-     * Генерирует ответ с учетом контекста разговора
+     * Генерирует ответ с учетом контекста разговора и разбивкой на части
      */
-    public String generateResponse(Long userId, String userMessage) {
+    public List<String> generateResponseAsParts(Long userId, String userMessage) {
         try {
             log.info("Sending request to OpenRouter for user {}: {}", userId, userMessage);
 
             if (apiKey == null || apiKey.isEmpty()) {
                 log.error("OpenRouter API key is not configured");
-                return "❌ API ключ OpenRouter не настроен. Обратитесь к администратору.";
+                return List.of("❌ API ключ OpenRouter не настроен. Обратитесь к администратору.");
             }
 
             conversationContextService.addUserMessage(userId, userMessage);
@@ -60,8 +64,15 @@ public class OpenRouterService {
 
             Map<String, Object> requestBody = new HashMap<>();
             requestBody.put("model", model);
-            requestBody.put("messages", conversationHistory);
-            requestBody.put("max_tokens", 500);
+
+            List<Map<String, String>> enhancedMessages = new ArrayList<>(conversationHistory);
+            enhancedMessages.add(Map.of(
+                    "role", "user",
+                    "content", userMessage + "\n\nПожалуйста, структурируй ответ с нумерацией и заголовками."
+            ));
+
+            requestBody.put("messages", enhancedMessages);
+            requestBody.put("max_tokens", 3000);
             requestBody.put("temperature", 0.7);
 
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
@@ -90,31 +101,165 @@ public class OpenRouterService {
 
                     conversationContextService.addAssistantMessage(userId, content);
 
-                    String escapedContent = TelegramMarkdownEscapeUtil.escapeMarkdownPreserveCode(content);
-                    log.debug("Escaped content length: {}", escapedContent.length());
+                    List<String> messageParts = telegramMessageSplitter.splitMessageSmart(content);
 
-                    return escapedContent;
+                    log.info("Split response into {} parts for user {}", messageParts.size(), userId);
+
+                    return messageParts;
+
                 } else {
                     log.error("❌ No choices in OpenRouter response: {}", response.getBody());
-                    return "❌ Ошибка: пустой ответ от AI сервиса";
+                    return List.of("❌ Ошибка: пустой ответ от AI сервиса");
                 }
             } else {
                 log.error("❌ OpenRouter API error: {} - {}", response.getStatusCode(), response.getBody());
-                return "❌ Ошибка API OpenRouter: " + response.getStatusCode();
+                return List.of("❌ Ошибка API OpenRouter: " + response.getStatusCode());
             }
 
         } catch (Exception e) {
             log.error("❌ Error generating AI response for user {}: {}", userId, e.getMessage(), e);
-            return handleOpenRouterError(e);
+            return List.of(handleOpenRouterError(e));
         }
     }
 
     /**
-     * Старая версия для обратной совместимости
+     * Старый метод для обратной совместимости
      */
     @Deprecated
-    public String generateResponse(String userMessage) {
-        return generateResponse(0L, userMessage);
+    public String generateResponse(Long userId, String userMessage) {
+        List<String> parts = generateResponseAsParts(userId, userMessage);
+        return String.join("\n\n", parts);
+    }
+
+    /**
+     * Разбивает длинное сообщение на части для Telegram
+     */
+    private List<String> splitMessageForTelegram(String text) {
+        List<String> parts = new ArrayList<>();
+
+        if (text == null || text.isEmpty()) {
+            return parts;
+        }
+
+        String safeText = TelegramMarkdownEscapeUtil.escapeMarkdownSmart(text);
+
+        int maxLength = 3500;
+
+        if (safeText.length() <= maxLength) {
+            parts.add(safeText);
+            return parts;
+        }
+
+        String[] paragraphs = safeText.split("\n\n");
+
+        StringBuilder currentPart = new StringBuilder();
+        int partNumber = 1;
+        int totalParts = estimateTotalParts(safeText, maxLength);
+
+        for (String paragraph : paragraphs) {
+            if (currentPart.length() + paragraph.length() + 20 > maxLength && !currentPart.isEmpty()) {
+                String numberedPart = formatMessagePart(partNumber, totalParts, currentPart.toString());
+                parts.add(numberedPart);
+
+                currentPart = new StringBuilder();
+                partNumber++;
+            }
+
+            if (!currentPart.isEmpty()) {
+                currentPart.append("\n\n");
+            }
+            currentPart.append(paragraph);
+        }
+
+        if (!currentPart.isEmpty()) {
+            String numberedPart = formatMessagePart(partNumber, totalParts, currentPart.toString());
+            parts.add(numberedPart);
+        }
+
+        return parts;
+    }
+
+    /**
+     * Оценивает общее количество частей
+     */
+    private int estimateTotalParts(String text, int maxLength) {
+        return (int) Math.ceil((double) text.length() / maxLength);
+    }
+
+    /**
+     * Форматирует часть сообщения с нумерацией
+     */
+    private String formatMessagePart(int partNumber, int totalParts, String content) {
+        if (totalParts <= 1) {
+            return content;
+        }
+
+        String header = String.format("📄 *Часть %d из %d:*\n\n", partNumber, totalParts);
+        String footer = String.format("\n\n_Продолжение следует... (%d/%d)_", partNumber, totalParts);
+
+        return header + content + footer;
+    }
+
+    /**
+     * Альтернативный метод разбивки по предложениям
+     */
+    private List<String> splitBySentences(String text, int maxLength) {
+        List<String> parts = new ArrayList<>();
+
+        if (text.length() <= maxLength) {
+            parts.add(text);
+            return parts;
+        }
+
+        String[] sentences = text.split("(?<=[.!?])\\s+");
+
+        StringBuilder currentPart = new StringBuilder();
+
+        for (String sentence : sentences) {
+            if (currentPart.length() + sentence.length() + 1 > maxLength && !currentPart.isEmpty()) {
+                parts.add(currentPart.toString());
+                currentPart = new StringBuilder();
+            }
+
+            if (!currentPart.isEmpty()) {
+                currentPart.append(" ");
+            }
+            currentPart.append(sentence);
+        }
+
+        if (!currentPart.isEmpty()) {
+            parts.add(currentPart.toString());
+        }
+
+        return parts;
+    }
+
+    /**
+     * Разбивает на фиксированные части
+     */
+    private List<String> splitIntoChunks(String text, int chunkSize) {
+        List<String> chunks = new ArrayList<>();
+
+        for (int i = 0; i < text.length(); i += chunkSize) {
+            int end = Math.min(text.length(), i + chunkSize);
+
+            if (end < text.length() && !Character.isWhitespace(text.charAt(end))) {
+                int lastSpace = text.lastIndexOf(' ', end);
+                if (lastSpace > i + chunkSize / 2) {
+                    end = lastSpace;
+                }
+            }
+
+            chunks.add(text.substring(i, end).trim());
+
+            if (end < text.length() && Character.isWhitespace(text.charAt(end))) {
+                i = end;
+            } else {
+                i = end - chunkSize;
+            }
+        }
+
+        return chunks;
     }
 
     /**

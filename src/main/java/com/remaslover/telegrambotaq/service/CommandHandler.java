@@ -15,6 +15,7 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMar
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
+import java.util.List;
 
 @Component
 public class CommandHandler {
@@ -28,6 +29,7 @@ public class CommandHandler {
     private final MessageSender messageSender;
     private final KeyboardManager keyboardManager;
     private final ConversationContextService conversationContextService;
+    private final MessageQueueService messageQueueService;
 
     private static final Logger log = LoggerFactory.getLogger(CommandHandler.class);
 
@@ -67,7 +69,7 @@ public class CommandHandler {
                           OpenRouterLimitService openRouterLimitService,
                           TelegramBotConfig config,
                           MessageSender messageSender,
-                          KeyboardManager keyboardManager, ConversationContextService conversationContextService) {
+                          KeyboardManager keyboardManager, ConversationContextService conversationContextService, MessageQueueService messageQueueService) {
         this.messageSender = messageSender;
         this.keyboardManager = keyboardManager;
         this.userService = userService;
@@ -78,6 +80,7 @@ public class CommandHandler {
         this.openRouterLimitService = openRouterLimitService;
         this.config = config;
         this.conversationContextService = conversationContextService;
+        this.messageQueueService = messageQueueService;
     }
 
     private void sendMessage(long chatId, String text) {
@@ -330,7 +333,7 @@ public class CommandHandler {
     }
 
     /**
-     * Обработка AI запросов с учетом контекста
+     * Обработка AI запросов с разбивкой и очередью
      */
     public void handleAiRequest(long chatId, Long userId, String messageText) {
         String question = extractQuestion(messageText);
@@ -353,18 +356,61 @@ public class CommandHandler {
             String thinkingText = "🤔 Думаю над ответом... (осталось AI запросов: " + remaining + ")";
             sendMessage(chatId, thinkingText);
 
-            String response = openRouterService.generateResponse(userId, question);
-            sendMessage(chatId, response);
+            List<String> responseParts = openRouterService.generateResponseAsParts(userId, question);
+
+            if (responseParts.isEmpty()) {
+                sendMessage(chatId, "⚠️ Получен пустой ответ от AI. Попробуйте переформулировать вопрос.");
+                return;
+            }
+
+            sendMessage(chatId, responseParts.get(0));
+
+            if (responseParts.size() > 1) {
+                String notice = String.format(
+                        "📄 *Ответ состоит из %d частей. Отправляю продолжение...*",
+                        responseParts.size()
+                );
+
+                messageQueueService.enqueueMessage(chatId, notice, 1000);
+
+                messageQueueService.enqueueMessages(chatId,
+                        responseParts.subList(1, responseParts.size()),
+                        2000);
+            }
 
             rateLimitService.registerAiRequest(userId);
 
-            log.info("AI response generated for user {} (remaining: {})",
-                    userId, remaining - 1);
+            log.info("AI response generated for user {} in {} parts (remaining: {})",
+                    userId, responseParts.size(), remaining - 1);
 
         } catch (Exception e) {
             log.error("AI request error for user {}: {}", userId, e.getMessage(), e);
             sendMessage(chatId, "⚠️ Ошибка при обращении к AI. Попробуйте позже.");
         }
+    }
+
+    /**
+     * Планирует отправку оставшихся частей сообщения
+     */
+    private void scheduleMessageParts(long chatId, List<String> parts, int startIndex) {
+        new Thread(() -> {
+            try {
+                for (int i = startIndex; i < parts.size(); i++) {
+                    Thread.sleep(1500);
+
+                    sendMessage(chatId, parts.get(i));
+
+                    log.debug("Sent part {}/{} to chat {}", i + 1, parts.size(), chatId);
+
+                    if (i < parts.size() - 1) {
+                        Thread.sleep(500);
+                    }
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.warn("Message scheduling interrupted for chat {}", chatId);
+            }
+        }).start();
     }
 
     /**
