@@ -41,6 +41,7 @@ public class OpenRouterService {
 
     /**
      * Генерирует ответ с учетом контекста разговора и разбивкой на части
+     * (Новый метод, возвращающий список частей)
      */
     public List<String> generateResponseAsParts(Long userId, String userMessage) {
         try {
@@ -64,15 +65,8 @@ public class OpenRouterService {
 
             Map<String, Object> requestBody = new HashMap<>();
             requestBody.put("model", model);
-
-            List<Map<String, String>> enhancedMessages = new ArrayList<>(conversationHistory);
-            enhancedMessages.add(Map.of(
-                    "role", "user",
-                    "content", userMessage + "\n\nПожалуйста, структурируй ответ с нумерацией и заголовками."
-            ));
-
-            requestBody.put("messages", enhancedMessages);
-            requestBody.put("max_tokens", 3000);
+            requestBody.put("messages", conversationHistory);
+            requestBody.put("max_tokens", 2000);
             requestBody.put("temperature", 0.7);
 
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
@@ -101,7 +95,7 @@ public class OpenRouterService {
 
                     conversationContextService.addAssistantMessage(userId, content);
 
-                    List<String> messageParts = telegramMessageSplitter.splitMessageSmart(content);
+                    List<String> messageParts = splitMessageForTelegram(content);
 
                     log.info("Split response into {} parts for user {}", messageParts.size(), userId);
 
@@ -120,15 +114,6 @@ public class OpenRouterService {
             log.error("❌ Error generating AI response for user {}: {}", userId, e.getMessage(), e);
             return List.of(handleOpenRouterError(e));
         }
-    }
-
-    /**
-     * Старый метод для обратной совместимости
-     */
-    @Deprecated
-    public String generateResponse(Long userId, String userMessage) {
-        List<String> parts = generateResponseAsParts(userId, userMessage);
-        return String.join("\n\n", parts);
     }
 
     /**
@@ -153,30 +138,44 @@ public class OpenRouterService {
         String[] paragraphs = safeText.split("\n\n");
 
         StringBuilder currentPart = new StringBuilder();
-        int partNumber = 1;
-        int totalParts = estimateTotalParts(safeText, maxLength);
 
         for (String paragraph : paragraphs) {
-            if (currentPart.length() + paragraph.length() + 20 > maxLength && !currentPart.isEmpty()) {
-                String numberedPart = formatMessagePart(partNumber, totalParts, currentPart.toString());
-                parts.add(numberedPart);
+            if (currentPart.length() + paragraph.length() + 20 > maxLength && currentPart.length() > 0) {
+                parts.add(currentPart.toString());
 
                 currentPart = new StringBuilder();
-                partNumber++;
             }
 
-            if (!currentPart.isEmpty()) {
+            if (currentPart.length() > 0) {
                 currentPart.append("\n\n");
             }
             currentPart.append(paragraph);
         }
 
-        if (!currentPart.isEmpty()) {
-            String numberedPart = formatMessagePart(partNumber, totalParts, currentPart.toString());
-            parts.add(numberedPart);
+        if (currentPart.length() > 0) {
+            parts.add(currentPart.toString());
         }
 
         return parts;
+    }
+
+    /**
+     * Старый метод для обратной совместимости
+     */
+    public String generateResponse(Long userId, String userMessage) {
+        try {
+            List<String> parts = generateResponseAsParts(userId, userMessage);
+            if (parts.isEmpty()) {
+                return "Пустой ответ от AI";
+            } else if (parts.size() == 1) {
+                return parts.get(0);
+            } else {
+                return parts.get(0) + "\n\n📄 *Продолжение следует в следующем сообщении...*";
+            }
+        } catch (Exception e) {
+            log.error("Error in generateResponse: {}", e.getMessage(), e);
+            return "Ошибка при генерации ответа";
+        }
     }
 
     /**
