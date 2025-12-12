@@ -93,7 +93,7 @@ public class TelegramBotService extends TelegramLongPollingBot {
                 commandHandler.handleRegularCommands(chatId, userId, messageText, update.getMessage());
             }
         } else if (update.hasCallbackQuery()) {
-            handleCallbackQuery(update);
+            commandHandler.handleCallbackQuery(update.getCallbackQuery());
         }
     }
 
@@ -104,20 +104,6 @@ public class TelegramBotService extends TelegramLongPollingBot {
             messageSender.sendMessage(user.getId(), textToSend);
         }
         log.info("Broadcast message sent to {} users", users.size());
-    }
-
-    private void handleCallbackQuery(Update update) {
-        String callbackQuery = update.getCallbackQuery().getData();
-        long messageId = update.getCallbackQuery().getMessage().getMessageId();
-        long chatId = update.getCallbackQuery().getMessage().getChatId();
-
-        if (callbackQuery.equals(Button.YES_BUTTON.name())) {
-            String text = "✅ Вы нажали кнопку ДА - регистрация выполнена!";
-            messageSender.editMessage(chatId, (int) messageId, text);
-        } else if (callbackQuery.equals(Button.NO_BUTTON.name())) {
-            String text = "❌ Вы нажали кнопку НЕТ - регистрация отменена.";
-            messageSender.editMessage(chatId, (int) messageId, text);
-        }
     }
 
     @Deprecated

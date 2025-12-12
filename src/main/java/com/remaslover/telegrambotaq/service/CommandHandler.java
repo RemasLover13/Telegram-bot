@@ -8,6 +8,8 @@ import com.vdurmont.emoji.EmojiParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
+import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
@@ -92,6 +94,8 @@ public class CommandHandler {
         messageSender.sendMessageWithKeyboard(chatId, text, keyboard);
     }
 
+
+
     public void handleRegularCommands(long chatId, Long userId, String messageText, Message message) {
         switch (messageText) {
             case "/start":
@@ -150,6 +154,225 @@ public class CommandHandler {
                 } else {
                     sendMessage(chatId, "❓ Неизвестная команда. Используйте /help для списка команд.");
                 }
+        }
+    }
+
+    /**
+     * Обработка callback-запросов от inline клавиатуры
+     */
+    public void handleCallbackQuery(CallbackQuery callbackQuery) {
+        try {
+            long chatId = callbackQuery.getMessage().getChatId();
+            Long userId = callbackQuery.getFrom().getId();
+            String callbackData = callbackQuery.getData();
+            Integer messageId = callbackQuery.getMessage().getMessageId();
+
+            log.info("Received callback query from chat {}: {}", chatId, callbackData);
+
+            AnswerCallbackQuery answer = new AnswerCallbackQuery();
+            answer.setCallbackQueryId(callbackQuery.getId());
+
+            // Если это команда контекста
+            if (callbackData != null && callbackData.startsWith("/context")) {
+                // Убираем часики и показываем уведомление
+                answer.setText("✅ Обрабатываю команду...");
+                try {
+                    messageSender.getBot().execute(answer);
+                } catch (Exception e) {
+                    log.warn("Could not send callback answer: {}", e.getMessage());
+                }
+
+                // Выполняем команду контекста
+                handleContextCommand(chatId, userId, callbackData);
+
+            } else if (callbackData != null && callbackData.startsWith("/news")) {
+                // Обработка новостных команд
+                answer.setText("📰 Получаю новости...");
+                try {
+                    messageSender.getBot().execute(answer);
+                } catch (Exception e) {
+                    log.warn("Could not send callback answer: {}", e.getMessage());
+                }
+
+                handleNewsCallback(chatId, callbackData);
+
+            } else if (callbackData != null) {
+                handleOtherCallback(chatId, userId, callbackData, messageId);
+
+            } else {
+                answer.setText("❌ Неизвестная команда");
+                try {
+                    messageSender.getBot().execute(answer);
+                } catch (Exception e) {
+                    log.warn("Could not send callback answer: {}", e.getMessage());
+                }
+            }
+
+        } catch (Exception e) {
+            log.error("Error handling callback query: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Обработка новостных callback-команд
+     */
+    private void handleNewsCallback(long chatId, String callbackData) {
+        String[] parts = callbackData.split(" ");
+
+        if (parts.length == 0) {
+            return;
+        }
+
+        String command = parts[0];
+
+        switch (command) {
+            case "/news_category":
+                if (parts.length > 1) {
+                    String category = parts[1];
+                    String fullCommand = "/news_category " + category;
+                    handleNewsCategoryCommand(chatId, fullCommand);
+                } else {
+                    handleNewsCategoryCommand(chatId, "/news_category");
+                }
+                break;
+
+            case "/news_country":
+                if (parts.length > 1) {
+                    String country = parts[1];
+                    String fullCommand = "/news_country " + country;
+                    handleNewsCountryCommand(chatId, fullCommand);
+                } else {
+                    handleNewsCountryCommand(chatId, "/news_country");
+                }
+                break;
+
+            case "/news_search":
+                if (parts.length > 1) {
+                    String query = String.join(" ", Arrays.copyOfRange(parts, 1, parts.length));
+                    String fullCommand = "/news_search " + query;
+                    handleNewsSearchCommand(chatId, fullCommand);
+                } else {
+                    handleNewsSearchCommand(chatId, "/news_search");
+                }
+                break;
+
+            case "/topnews":
+                if (parts.length > 1) {
+                    String country = parts[1];
+                    String category = parts.length > 2 ? parts[2] : "";
+                    String fullCommand = "/topnews " + country + " " + category;
+                    handleTopNewsCommand(chatId, fullCommand);
+                } else {
+                    handleTopNewsCommand(chatId, "/topnews");
+                }
+                break;
+        }
+    }
+
+    /**
+     * Обработка других callback-данных
+     */
+    private void handleOtherCallback(long chatId, Long userId, String callbackData, Integer messageId) {
+
+        if ("BUTTON_YES".equals(callbackData) || "BUTTON_NO".equals(callbackData)) {
+            String response = callbackData.equals("BUTTON_YES")
+                    ? "✅ Вы согласились на регистрацию!"
+                    : "❌ Вы отказались от регистрации";
+
+            sendMessage(chatId, response);
+
+            if (messageId != null) {
+                try {
+                    messageSender.editMessage(chatId, messageId, "Ваш выбор принят!");
+                } catch (Exception e) {
+                    log.warn("Could not edit message: {}", e.getMessage());
+                }
+            }
+        }
+    }
+
+    /**
+     * Показывает меню контекста с inline клавиатурой
+     */
+    public void showContextMenu(long chatId) {
+        String menuText = """
+                🧠 *Управление контекстом разговора*
+                
+                Выберите действие:
+                """;
+
+        InlineKeyboardMarkup keyboard = keyboardManager.createContextKeyboard();
+        messageSender.sendMessageWithInlineKeyboard(chatId, menuText, keyboard);
+    }
+
+    /**
+     * Обновленный метод управления контекстом
+     */
+    public void handleContextCommand(long chatId, Long userId, String messageText) {
+        String[] parts = messageText.split(" ");
+
+        if (parts.length == 1) {
+            showContextMenu(chatId);
+
+        } else {
+            String subCommand = parts[1].toLowerCase();
+
+            switch (subCommand) {
+                case "clear":
+                    openRouterService.clearConversationHistory(userId);
+                    sendMessage(chatId, "✅ История разговора очищена");
+                    log.info("User {} cleared conversation history", userId);
+                    break;
+
+                case "show":
+                    try {
+                        String history = openRouterService.getConversationHistorySimple(userId);
+                        sendMessage(chatId, history);
+                    } catch (Exception e) {
+                        log.error("Error showing context for user {}: {}", userId, e.getMessage());
+                        sendMessage(chatId, "⚠️ Ошибка при получении истории.");
+                    }
+                    break;
+
+                case "show_md":
+                    try {
+                        String history = openRouterService.getConversationHistory(userId);
+                        sendMessage(chatId, history);
+                    } catch (Exception e) {
+                        log.warn("Markdown context failed for user {}, falling back: {}",
+                                userId, e.getMessage());
+                        String history = openRouterService.getConversationHistorySimple(userId);
+                        sendMessage(chatId, history);
+                    }
+                    break;
+
+                case "show_debug":
+                    try {
+                        String history = openRouterService.getConversationHistoryDebug(userId);
+                        sendMessage(chatId, history);
+                    } catch (Exception e) {
+                        log.error("Error showing debug context for user {}: {}", userId, e.getMessage());
+                        sendMessage(chatId, "❌ Ошибка при получении отладочной истории.");
+                    }
+                    break;
+
+                case "stats":
+                    try {
+                        String stats = openRouterService.getContextStats();
+                        sendMessage(chatId, TelegramMarkdownEscapeUtil.escapeMarkdownV2(stats));
+                    } catch (Exception e) {
+                        log.error("Error showing stats for user {}: {}", userId, e.getMessage());
+                        sendMessage(chatId, "❌ Ошибка при получении статистики.");
+                    }
+                    break;
+
+                case "help":
+                    handleContextCommand(chatId, userId, "/context");
+                    break;
+
+                default:
+                    sendMessage(chatId, "❓ Неизвестная подкоманда. Используйте `/context help`");
+            }
         }
     }
 
@@ -389,90 +612,6 @@ public class CommandHandler {
         }
     }
 
-
-    /**
-     * Управление контекстом разговора
-     */
-    public void handleContextCommand(long chatId, Long userId, String messageText) {
-        String[] parts = messageText.split(" ");
-
-        if (parts.length == 1) {
-            String contextHelp = """
-                    🧠 *Управление контекстом разговора:*
-                                        
-                    • `/context clear` - очистить историю разговора
-                    • `/context show` - показать историю (безопасный режим)
-                    • `/context show_md` - показать историю (с Markdown)
-                    • `/context show_debug` - показать историю (для отладки)
-                    • `/context stats` - статистика контекста
-                    • `/context help` - эта справка
-                                        
-                    *Примечание:* Бот помнит последние 10 сообщений в разговоре
-                    Контекст автоматически очищается через 30 минут неактивности
-                    """;
-            sendMessage(chatId, contextHelp);
-
-        } else {
-            String subCommand = parts[1].toLowerCase();
-
-            switch (subCommand) {
-                case "clear":
-                    openRouterService.clearConversationHistory(userId);
-                    sendMessage(chatId, "✅ История разговора очищена");
-                    log.info("User {} cleared conversation history", userId);
-                    break;
-
-                case "show":
-                    try {
-                        String history = openRouterService.getConversationHistorySimple(userId);
-                        sendMessage(chatId, history);
-                    } catch (Exception e) {
-                        log.error("Error showing context for user {}: {}", userId, e.getMessage());
-                        sendMessage(chatId, "⚠️ Ошибка при получении истории.");
-                    }
-                    break;
-
-                case "show_md":
-                    try {
-                        String history = openRouterService.getConversationHistory(userId);
-                        sendMessage(chatId, history);
-                    } catch (Exception e) {
-                        log.warn("Markdown context failed for user {}, falling back: {}",
-                                userId, e.getMessage());
-                        String history = openRouterService.getConversationHistorySimple(userId);
-                        sendMessage(chatId, history);
-                    }
-                    break;
-
-                case "show_debug":
-                    try {
-                        String history = openRouterService.getConversationHistoryDebug(userId);
-                        sendMessage(chatId, history);
-                    } catch (Exception e) {
-                        log.error("Error showing debug context for user {}: {}", userId, e.getMessage());
-                        sendMessage(chatId, "❌ Ошибка при получении отладочной истории.");
-                    }
-                    break;
-
-                case "stats":
-                    try {
-                        String stats = openRouterService.getContextStats();
-                        sendMessage(chatId, TelegramMarkdownEscapeUtil.escapeMarkdownSmart(stats));
-                    } catch (Exception e) {
-                        log.error("Error showing stats for user {}: {}", userId, e.getMessage());
-                        sendMessage(chatId, "❌ Ошибка при получении статистики.");
-                    }
-                    break;
-
-                case "help":
-                    handleContextCommand(chatId, userId, "/context");
-                    break;
-
-                default:
-                    sendMessage(chatId, "❓ Неизвестная подкоманда. Используйте `/context help`");
-            }
-        }
-    }
 
     public void handleCreditsCommand(long chatId) {
         if (config.getBotOwner().equals(chatId)) {

@@ -1,6 +1,7 @@
 package com.remaslover.telegrambotaq.service;
 
 import com.remaslover.telegrambotaq.config.TelegramBotConfig;
+import com.remaslover.telegrambotaq.util.TelegramMarkdownEscapeUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationContext;
@@ -25,8 +26,38 @@ public class MessageSender {
         this.botConfig = botConfig;
     }
 
-    private TelegramLongPollingBot getBot() {
+    public TelegramLongPollingBot getBot() {
         return applicationContext.getBean(TelegramLongPollingBot.class);
+    }
+
+    public void sendMessageWithInlineKeyboard(long chatId, String text, InlineKeyboardMarkup keyboard) {
+        try {
+            SendMessage sendMessage = new SendMessage();
+            sendMessage.setChatId(String.valueOf(chatId));
+
+            String escapedText = TelegramMarkdownEscapeUtil.escapeMarkdownV2(text);
+            sendMessage.setText(escapedText);
+            sendMessage.setParseMode("MarkdownV2");
+            sendMessage.setReplyMarkup(keyboard);
+
+            try {
+                getBot().execute(sendMessage);
+                log.debug("✅ Message with inline keyboard sent to chat {} using MarkdownV2", chatId);
+
+            } catch (TelegramApiException e) {
+                log.warn("MarkdownV2 failed for inline keyboard, trying HTML: {}", e.getMessage());
+
+                sendMessage.setText(TelegramMarkdownEscapeUtil.escapeHtml(text));
+                sendMessage.setParseMode("HTML");
+                getBot().execute(sendMessage);
+                log.debug("✅ Message with inline keyboard sent to chat {} using HTML", chatId);
+            }
+
+        } catch (Exception e) {
+            log.error("Error sending message with inline keyboard: {}", e.getMessage(), e);
+
+            sendMessage(chatId, text);
+        }
     }
 
     public void sendMessage(long chatId, String text) {
@@ -88,19 +119,6 @@ public class MessageSender {
         }
     }
 
-    public void sendMessageWithInlineKeyboard(long chatId, String text, InlineKeyboardMarkup keyboard) {
-        SendMessage sendMessage = new SendMessage();
-        sendMessage.setChatId(String.valueOf(chatId));
-        sendMessage.setText(text);
-        sendMessage.setParseMode("Markdown");
-        sendMessage.setReplyMarkup(keyboard);
-
-        try {
-            getBot().execute(sendMessage);
-        } catch (TelegramApiException e) {
-            log.error("Error sending message with inline keyboard: {}", e.getMessage());
-        }
-    }
 
     public void editMessage(long chatId, int messageId, String newText) {
         EditMessageText message = new EditMessageText();

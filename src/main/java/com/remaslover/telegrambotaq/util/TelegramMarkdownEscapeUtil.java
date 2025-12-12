@@ -14,6 +14,93 @@ public class TelegramMarkdownEscapeUtil {
     };
 
     /**
+     * Полное экранирование для Telegram MarkdownV2
+     */
+    public static String escapeMarkdownV2(String text) {
+        if (text == null || text.isEmpty()) {
+            return "";
+        }
+
+        StringBuilder result = new StringBuilder();
+
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+
+            switch (c) {
+                case '_':
+                case '*':
+                case '[':
+                case ']':
+                case '(':
+                case ')':
+                case '~':
+                case '`':
+                case '#':
+                case '+':
+                case '-':
+                case '=':
+                case '|':
+                case '{':
+                case '}':
+                case '.':
+                case '!':
+                    result.append('\\').append(c);
+                    break;
+                case '\\':
+                    if (i + 1 < text.length()) {
+                        char next = text.charAt(i + 1);
+                        if (isMarkdownV2SpecialChar(next)) {
+                            result.append('\\').append(next);
+                            i++;
+                        } else {
+                            result.append("\\\\");
+                        }
+                    } else {
+                        result.append("\\\\");
+                    }
+                    break;
+                case '&':
+                    result.append("&amp;");
+                    break;
+                case '<':
+                    result.append("&lt;");
+                    break;
+                case '>':
+                    result.append("&gt;");
+                    break;
+                default:
+                    result.append(c);
+            }
+        }
+
+        return result.toString();
+    }
+
+    private static boolean isMarkdownV2SpecialChar(char c) {
+        return c == '_' || c == '*' || c == '[' || c == ']' ||
+               c == '(' || c == ')' || c == '~' || c == '`' ||
+               c == '>' || c == '#' || c == '+' || c == '-' ||
+               c == '=' || c == '|' || c == '{' || c == '}' ||
+               c == '.' || c == '!';
+    }
+
+    /**
+     * Экранирование для HTML (альтернативный вариант)
+     */
+    public static String escapeHtml(String text) {
+        if (text == null || text.isEmpty()) {
+            return "";
+        }
+
+        return text
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("'", "&#39;");
+    }
+
+    /**
      * Умное экранирование MarkdownV2:
      * - Не экранирует уже экранированные символы
      * - Сохраняет блоки кода
@@ -197,7 +284,6 @@ public class TelegramMarkdownEscapeUtil {
             else if (c == '(') parenthesisBalance++;
             else if (c == ')') parenthesisBalance--;
 
-            // Если баланс отрицательный - ошибка
             if (bracketBalance < 0 || parenthesisBalance < 0) {
                 return false;
             }

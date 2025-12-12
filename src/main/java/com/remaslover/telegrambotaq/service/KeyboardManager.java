@@ -14,6 +14,83 @@ import java.util.List;
 @Component
 public class KeyboardManager {
 
+    public static class Button {
+        public static final String YES_BUTTON = "BUTTON_YES";
+        public static final String NO_BUTTON = "BUTTON_NO";
+
+        public static final String CONTEXT_CLEAR = "/context clear";
+        public static final String CONTEXT_SHOW = "/context show";
+        public static final String CONTEXT_SHOW_DEBUG = "/context show_debug";
+        public static final String CONTEXT_STATS = "/context stats";
+        public static final String CONTEXT_HELP = "/context help";
+
+        public static final String NEWS_TECH = "/news_category технологии";
+        public static final String NEWS_SPORTS = "/news_category спорт";
+        public static final String NEWS_RUSSIA = "/news_country россия";
+        public static final String NEWS_USA = "/news_country сша";
+    }
+
+
+    public InlineKeyboardMarkup createContextKeyboard() {
+        InlineKeyboardMarkup keyboard = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+
+        List<InlineKeyboardButton> row1 = new ArrayList<>();
+        row1.add(createInlineButton("🧹 Очистить", Button.CONTEXT_CLEAR));
+        row1.add(createInlineButton("👁️ Показать", Button.CONTEXT_SHOW));
+
+        List<InlineKeyboardButton> row2 = new ArrayList<>();
+        row2.add(createInlineButton("🐛 Отладка", Button.CONTEXT_SHOW_DEBUG));
+        row2.add(createInlineButton("📊 Статистика", Button.CONTEXT_STATS));
+
+        List<InlineKeyboardButton> row3 = new ArrayList<>();
+        row3.add(createInlineButton("❓ Помощь", Button.CONTEXT_HELP));
+
+        rows.add(row1);
+        rows.add(row2);
+        rows.add(row3);
+
+        keyboard.setKeyboard(rows);
+        return keyboard;
+    }
+
+    /**
+     * Создает кнопку с callback-данными
+     */
+    private InlineKeyboardButton createInlineButton(String text, String callbackData) {
+        InlineKeyboardButton button = new InlineKeyboardButton();
+        button.setText(text);
+        button.setCallbackData(callbackData);
+        return button;
+    }
+
+    /**
+     * Создает клавиатуру для быстрого доступа к новостям
+     */
+    public InlineKeyboardMarkup createNewsQuickKeyboard() {
+        InlineKeyboardMarkup keyboard = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> rows = new ArrayList<>();
+
+        List<InlineKeyboardButton> row1 = new ArrayList<>();
+        row1.add(createInlineButton("🤖 Технологии", Button.NEWS_TECH));
+        row1.add(createInlineButton("⚽ Спорт", Button.NEWS_SPORTS));
+
+        List<InlineKeyboardButton> row2 = new ArrayList<>();
+        row2.add(createInlineButton("🇷🇺 Россия", Button.NEWS_RUSSIA));
+        row2.add(createInlineButton("🇺🇸 США", Button.NEWS_USA));
+
+        List<InlineKeyboardButton> row3 = new ArrayList<>();
+        row3.add(createInlineButton("🔥 Главные", "/topnews"));
+        row3.add(createInlineButton("🔍 Поиск", "/news_search"));
+
+        rows.add(row1);
+        rows.add(row2);
+        rows.add(row3);
+
+        keyboard.setKeyboard(rows);
+        return keyboard;
+    }
+
     public ReplyKeyboardMarkup createMainKeyboard() {
         ReplyKeyboardMarkup keyboardMarkup = new ReplyKeyboardMarkup();
         keyboardMarkup.setResizeKeyboard(true);
@@ -55,11 +132,11 @@ public class KeyboardManager {
 
         var yesButton = new InlineKeyboardButton();
         yesButton.setText("✅ Да");
-        yesButton.setCallbackData(Button.YES_BUTTON.name());
+        yesButton.setCallbackData(Button.YES_BUTTON);
 
         var noButton = new InlineKeyboardButton();
         noButton.setText("❌ Нет");
-        noButton.setCallbackData(Button.NO_BUTTON.name());
+        noButton.setCallbackData(Button.NO_BUTTON);
 
         rowInline.add(yesButton);
         rowInline.add(noButton);
@@ -88,4 +165,6 @@ public class KeyboardManager {
 
         return listOfCommands;
     }
+
+
 }
