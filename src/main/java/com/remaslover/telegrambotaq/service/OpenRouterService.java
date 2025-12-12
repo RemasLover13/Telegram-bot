@@ -27,20 +27,30 @@ public class OpenRouterService {
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+    private final ConversationContextService conversationContextService;
 
-    public OpenRouterService() {
+    public OpenRouterService(ConversationContextService conversationContextService) {
         this.restTemplate = new RestTemplate();
         this.objectMapper = new ObjectMapper();
+        this.conversationContextService = conversationContextService;
     }
 
-    public String generateResponse(String userMessage) {
+    /**
+     * Генерирует ответ с учетом контекста разговора
+     */
+    public String generateResponse(Long userId, String userMessage) {
         try {
-            log.info("Sending request to OpenRouter: {}", userMessage);
+            log.info("Sending request to OpenRouter for user {}: {}", userId, userMessage);
 
             if (apiKey == null || apiKey.isEmpty()) {
                 log.error("OpenRouter API key is not configured");
                 return "❌ API ключ OpenRouter не настроен. Обратитесь к администратору.";
             }
+
+            conversationContextService.addUserMessage(userId, userMessage);
+
+            List<Map<String, String>> conversationHistory =
+                    conversationContextService.getFullConversation(userId, getSystemPrompt());
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
@@ -50,23 +60,13 @@ public class OpenRouterService {
 
             Map<String, Object> requestBody = new HashMap<>();
             requestBody.put("model", model);
-            requestBody.put("messages", List.of(
-                    Map.of("role", "system", "content", """
-                            Ты полезный ассистент в Telegram боте. 
-                            Отвечай на русском языке кратко и понятно.
-                            Будь дружелюбным и помогай пользователям.
-                            Если вопрос неясен или требует уточнения - вежливо попроси уточнить.
-                            Форматируй ответы для лучшей читаемости.
-                            Максимальная длина ответа: 500 символов.
-                            """),
-                    Map.of("role", "user", "content", userMessage)
-            ));
+            requestBody.put("messages", conversationHistory);
             requestBody.put("max_tokens", 500);
             requestBody.put("temperature", 0.7);
 
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
 
-            log.info("Sending HTTP request to OpenRouter with model: {}", model);
+            log.info("Sending HTTP request to OpenRouter with {} messages", conversationHistory.size());
 
             ResponseEntity<String> response = restTemplate.exchange(
                     "https://openrouter.ai/api/v1/chat/completions",
@@ -85,11 +85,14 @@ public class OpenRouterService {
                             .path("content")
                             .asText();
 
-                    log.info("✅ OpenRouter response received: {} characters", content.length());
+                    log.info("✅ OpenRouter response received for user {}: {} characters",
+                            userId, content.length());
+
+                    conversationContextService.addAssistantMessage(userId, content);
 
                     String escapedContent = TelegramMarkdownEscapeUtil.escapeMarkdownPreserveCode(content);
                     log.debug("Escaped content length: {}", escapedContent.length());
-                    
+
                     return escapedContent;
                 } else {
                     log.error("❌ No choices in OpenRouter response: {}", response.getBody());
@@ -101,9 +104,81 @@ public class OpenRouterService {
             }
 
         } catch (Exception e) {
-            log.error("❌ Error generating AI response: {}", e.getMessage(), e);
+            log.error("❌ Error generating AI response for user {}: {}", userId, e.getMessage(), e);
             return handleOpenRouterError(e);
         }
+    }
+
+    /**
+     * Старая версия для обратной совместимости
+     */
+    @Deprecated
+    public String generateResponse(String userMessage) {
+        return generateResponse(0L, userMessage);
+    }
+
+    /**
+     * Очищает историю разговора для пользователя
+     */
+    public void clearConversationHistory(Long userId) {
+        conversationContextService.clearHistory(userId);
+        log.info("Cleared conversation history for user {}", userId);
+    }
+
+    /**
+     * Получает историю разговора в читаемом формате
+     */
+    public String getConversationHistory(Long userId) {
+        List<Map<String, String>> history =
+                conversationContextService.getConversationHistory(userId);
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("📜 *История разговора:*\n\n");
+
+        if (history.isEmpty()) {
+            sb.append("История пуста");
+        } else {
+            for (Map<String, String> message : history) {
+                String role = message.get("role");
+                String content = message.get("content");
+                String timestamp = message.getOrDefault("timestamp", "");
+
+                String roleEmoji = role.equals("user") ? "👤" : "🤖";
+                String roleText = role.equals("user") ? "Вы" : "Бот";
+
+                String preview = content.length() > 80
+                        ? content.substring(0, 80) + "..."
+                        : content;
+
+                sb.append(roleEmoji)
+                        .append(" *")
+                        .append(roleText)
+                        .append("*: ")
+                        .append(preview.replace("\n", " "))
+                        .append("\n\n");
+            }
+        }
+
+        return sb.toString();
+    }
+
+    /**
+     * Получает статистику контекста
+     */
+    public String getContextStats() {
+        return conversationContextService.getFormattedStats();
+    }
+
+    private String getSystemPrompt() {
+        return """
+                Ты полезный ассистент в Telegram боте. 
+                Отвечай на русском языке кратко и понятно.
+                Будь дружелюбным и помогай пользователям.
+                Если вопрос неясен или требует уточнения - вежливо попроси уточнить.
+                Форматируй ответы для лучшей читаемости.
+                Максимальная длина ответа: 500 символов.
+                Помни контекст разговора и учитывай предыдущие сообщения.
+                """;
     }
 
     private String handleOpenRouterError(Exception e) {
@@ -121,6 +196,5 @@ public class OpenRouterService {
             return "⚠️ Временная ошибка AI сервиса. Попробуйте позже.";
         }
     }
-
 
 }

@@ -122,26 +122,46 @@ public class TelegramMarkdownEscapeUtil {
 
     private static String escapeBasicMarkdown(char c) {
         switch (c) {
-            case '\\': return "\\\\";
-            case '_': return "\\_";
-            case '*': return "\\*";
-            case '[': return "\\[";
-            case ']': return "\\]";
-            case '(': return "\\(";
-            case ')': return "\\)";
-            case '~': return "\\~";
-            case '`': return "\\`";
-            case '>': return "\\>";
-            case '#': return "\\#";
-            case '+': return "\\+";
-            case '-': return "\\-";
-            case '=': return "\\=";
-            case '|': return "\\|";
-            case '{': return "\\{";
-            case '}': return "\\}";
-            case '&': return "&amp;";
-            case '<': return "&lt;";
-            default: return String.valueOf(c);
+            case '\\':
+                return "\\\\";
+            case '_':
+                return "\\_";
+            case '*':
+                return "\\*";
+            case '[':
+                return "\\[";
+            case ']':
+                return "\\]";
+            case '(':
+                return "\\(";
+            case ')':
+                return "\\)";
+            case '~':
+                return "\\~";
+            case '`':
+                return "\\`";
+            case '>':
+                return "\\>";
+            case '#':
+                return "\\#";
+            case '+':
+                return "\\+";
+            case '-':
+                return "\\-";
+            case '=':
+                return "\\=";
+            case '|':
+                return "\\|";
+            case '{':
+                return "\\{";
+            case '}':
+                return "\\}";
+            case '&':
+                return "&amp;";
+            case '<':
+                return "&lt;";
+            default:
+                return String.valueOf(c);
         }
     }
 

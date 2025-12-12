@@ -1,8 +1,6 @@
 package com.remaslover.telegrambotaq.entity;
 
 
-import jakarta.persistence.*;
-
 public class Joke {
 
     private Long id;
@@ -13,7 +11,8 @@ public class Joke {
         this.content = content;
     }
 
-    public Joke() {}
+    public Joke() {
+    }
 
     public Long getId() {
         return id;

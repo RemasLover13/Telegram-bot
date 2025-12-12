@@ -22,15 +22,15 @@ public class HealthController {
     @GetMapping("/")
     public String home() {
         return """
-            <html>
-            <body>
-                <h1>🤖 Telegram Bot</h1>
-                <p>Status: <strong>RUNNING</strong></p>
-                <p>Time: %s</p>
-                <p>API: <a href="/ping">/ping</a> for health check</p>
-            </body>
-            </html>
-            """.formatted(LocalDateTime.now());
+                <html>
+                <body>
+                    <h1>🤖 Telegram Bot</h1>
+                    <p>Status: <strong>RUNNING</strong></p>
+                    <p>Time: %s</p>
+                    <p>API: <a href="/ping">/ping</a> for health check</p>
+                </body>
+                </html>
+                """.formatted(LocalDateTime.now());
     }
 
     @GetMapping("/health")

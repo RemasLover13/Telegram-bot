@@ -7,7 +7,6 @@ import com.vdurmont.emoji.EmojiParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
@@ -27,32 +26,36 @@ public class CommandHandler {
     private final TelegramBotConfig config;
     private final MessageSender messageSender;
     private final KeyboardManager keyboardManager;
+    private final ConversationContextService conversationContextService;
 
     private static final Logger log = LoggerFactory.getLogger(CommandHandler.class);
 
     public static final String HELP_TEXT = """
             🤖 *Доступные команды:*
+                        
+            *Основные:*
             /start - начать работу
             /help - помощь
             /my_data - мои данные
             /delete_data - удалить данные
+                        
+            *AI и контекст:*
+            /ai [вопрос] - задать вопрос AI
+            /context - управление контекстом разговора
+                        
+            *Информация:*
             /time - текущее время
             /joke - случайная шутка
-            /ai - задать вопрос AI (5 запросов/день)
             /usage - мои лимиты
-            /credits - остатки на OpenRouter (только для владельца)
+            /credits - остатки OpenRouter (только для владельца)
                         
-            📰 *Новости:*
+            *Новости:*
             /topnews [страна] [категория] - главные новости
             /news_category [категория] - новости по категории
             /news_country [страна] - новости по стране
             /news_search [запрос] - поиск новостей
                         
-            🌍 *Примеры:*
-            /topnews сша технологии
-            /news_category спорт
-            /news_country германия
-            /news_search искусственный интеллект
+            ✨ *Бот помнит контекст разговора (последние 10 сообщений)*
             """;
 
     public CommandHandler(UserService userService,
@@ -63,7 +66,7 @@ public class CommandHandler {
                           OpenRouterLimitService openRouterLimitService,
                           TelegramBotConfig config,
                           MessageSender messageSender,
-                          KeyboardManager keyboardManager) {
+                          KeyboardManager keyboardManager, ConversationContextService conversationContextService) {
         this.messageSender = messageSender;
         this.keyboardManager = keyboardManager;
         this.userService = userService;
@@ -73,6 +76,7 @@ public class CommandHandler {
         this.openRouterService = openRouterService;
         this.openRouterLimitService = openRouterLimitService;
         this.config = config;
+        this.conversationContextService = conversationContextService;
     }
 
     private void sendMessage(long chatId, String text) {
@@ -114,6 +118,10 @@ public class CommandHandler {
             case "📊 Лимиты":
                 handleUsageCommand(chatId, userId);
                 break;
+            case "/context":
+            case "🧠 Контекст":
+                handleContextCommand(chatId, userId, messageText);
+                break;
             case "📰 Новости":
                 showNewsHelp(chatId);
                 break;
@@ -130,7 +138,7 @@ public class CommandHandler {
                 handleNewsSearchCommand(chatId, "/news_search");
                 break;
             case "🤖 AI помощь":
-                sendMessage(chatId, "💡 Напишите ваш вопрос и я отвечу с помощью AI!");
+                sendMessage(chatId, "💡 Напишите ваш вопрос и я отвечу с учетом контекста разговора!");
                 break;
             default:
                 if (!messageText.startsWith("/")) {
@@ -320,6 +328,9 @@ public class CommandHandler {
         }
     }
 
+    /**
+     * Обработка AI запросов с учетом контекста
+     */
     public void handleAiRequest(long chatId, Long userId, String messageText) {
         String question = extractQuestion(messageText);
 
@@ -341,14 +352,67 @@ public class CommandHandler {
             String thinkingText = "🤔 Думаю над ответом... (осталось AI запросов: " + remaining + ")";
             sendMessage(chatId, thinkingText);
 
-            String response = openRouterService.generateResponse(question);
+            String response = openRouterService.generateResponse(userId, question);
             sendMessage(chatId, response);
 
-            log.info("AI response generated for user {} (remaining: {})", userId, remaining - 1);
+            rateLimitService.registerAiRequest(userId);
+
+            log.info("AI response generated for user {} (remaining: {})",
+                    userId, remaining - 1);
 
         } catch (Exception e) {
             log.error("AI request error for user {}: {}", userId, e.getMessage(), e);
             sendMessage(chatId, "⚠️ Ошибка при обращении к AI. Попробуйте позже.");
+        }
+    }
+
+    /**
+     * Управление контекстом разговора
+     */
+    public void handleContextCommand(long chatId, Long userId, String messageText) {
+        String[] parts = messageText.split(" ");
+
+        if (parts.length == 1) {
+            String contextHelp = """
+                    🧠 *Управление контекстом разговора:*
+                                    
+                    • /context clear - очистить историю разговора
+                    • /context show - показать историю
+                    • /context stats - статистика контекста
+                    • /context help - эта справка
+                                    
+                    *Примечание:* Бот помнит последние 10 сообщений в разговоре
+                    Контекст автоматически очищается через 30 минут неактивности
+                    """;
+            sendMessage(chatId, contextHelp);
+
+        } else {
+            String subCommand = parts[1].toLowerCase();
+
+            switch (subCommand) {
+                case "clear":
+                    openRouterService.clearConversationHistory(userId);
+                    sendMessage(chatId, "✅ История разговора очищена");
+                    log.info("User {} cleared conversation history", userId);
+                    break;
+
+                case "show":
+                    String history = openRouterService.getConversationHistory(userId);
+                    sendMessage(chatId, history);
+                    break;
+
+                case "stats":
+                    String stats = openRouterService.getContextStats();
+                    sendMessage(chatId, stats);
+                    break;
+
+                case "help":
+                    handleContextCommand(chatId, userId, "/context");
+                    break;
+
+                default:
+                    sendMessage(chatId, "❓ Неизвестная подкоманда. Используйте /context help");
+            }
         }
     }
 
@@ -361,19 +425,25 @@ public class CommandHandler {
         }
     }
 
+    /**
+     * Обновленная команда /start с информацией о контексте
+     */
     public void startCommandReceived(long chatId, String username) {
         String answer = EmojiParser.parseToUnicode(
                 "Привет, " + username + "! 👋\n\n" +
-                "Я ваш AI-помощник с интеграцией OpenRouter.\n" +
+                "Я ваш AI-помощник с *поддержкой контекста* разговора.\n" +
                 "✨ *Что я умею:*\n" +
-                "• Отвечать на любые вопросы через AI\n" +
+                "• Отвечать на вопросы с учетом истории диалога 🧠\n" +
+                "• Помнить контекст (10 последних сообщений)\n" +
                 "• Показывать текущее время\n" +
                 "• Рассказывать случайные шутки\n" +
                 "• Получать актуальные новости 📰\n" +
                 "• Хранить ваши данные\n\n" +
                 "🚀 *Доступно 5 AI-запросов в день*\n" +
+                "🧠 *Контекст сохраняется 30 минут*\n" +
                 "🌍 *Новости из 50+ стран и 7 категорий*\n\n" +
-                "Просто напишите мне вопрос или используйте /help для списка команд"
+                "Используйте /context для управления историей разговора\n" +
+                "Или просто напишите мне вопрос!"
         );
         log.info("Start command for user: {}", username);
         sendMessageWithKeyboard(chatId, answer);
@@ -391,4 +461,5 @@ public class CommandHandler {
         }
         return messageText.trim();
     }
+
 }

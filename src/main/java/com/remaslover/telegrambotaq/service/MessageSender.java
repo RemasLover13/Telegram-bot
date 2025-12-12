@@ -25,7 +25,6 @@ public class MessageSender {
         this.botConfig = botConfig;
     }
 
-    // Получаем бота лениво чтобы избежать цикла
     private TelegramLongPollingBot getBot() {
         return applicationContext.getBean(TelegramLongPollingBot.class);
     }

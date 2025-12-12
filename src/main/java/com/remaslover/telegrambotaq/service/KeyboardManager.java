@@ -39,6 +39,11 @@ public class KeyboardManager {
         row3.add("🔥 Главные новости");
         keyboardRows.add(row3);
 
+        KeyboardRow row4 = new KeyboardRow();
+        row4.add("🧠 Контекст");
+        row4.add("🔍 Поиск новостей");
+        keyboardRows.add(row4);
+
         keyboardMarkup.setKeyboard(keyboardRows);
         return keyboardMarkup;
     }
@@ -73,6 +78,7 @@ public class KeyboardManager {
         listOfCommands.add(new BotCommand("/time", "текущее время"));
         listOfCommands.add(new BotCommand("/joke", "случайная шутка"));
         listOfCommands.add(new BotCommand("/ai", "задать вопрос AI"));
+        listOfCommands.add(new BotCommand("/context", "управление контекстом"));
         listOfCommands.add(new BotCommand("/usage", "мои лимиты"));
         listOfCommands.add(new BotCommand("/credits", "остатки OpenRouter"));
         listOfCommands.add(new BotCommand("/topnews", "главные новости"));

@@ -18,7 +18,8 @@ public class NewsDTO {
         this.articles = articles;
     }
 
-    public NewsDTO() {}
+    public NewsDTO() {
+    }
 
     public String getStatus() {
         return status;

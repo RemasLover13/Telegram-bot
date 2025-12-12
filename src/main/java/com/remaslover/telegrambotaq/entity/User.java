@@ -27,7 +27,6 @@ public class User {
     private Date registeredAt;
 
 
-
     public User(String firstName, String lastName, String userName, Date registeredAt) {
         this.firstName = firstName;
         this.lastName = lastName;

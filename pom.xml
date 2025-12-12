@@ -20,6 +20,7 @@
         <org.telegram.version>6.9.7.1</org.telegram.version>
         <org.jsoup.version>1.15.3</org.jsoup.version>
         <com.vdurmont.emoji.version>5.1.1</com.vdurmont.emoji.version>
+        <caffeine.version>3.2.3</caffeine.version>
     </properties>
     <dependencyManagement>
         <dependencies>
@@ -37,6 +38,12 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+            <version>${caffeine.version}</version>
         </dependency>
 
         <dependency>
@@ -79,10 +86,13 @@
             <artifactId>jsoup</artifactId>
             <version>${org.jsoup.version}</version>
         </dependency>
+
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-model-openai</artifactId>
         </dependency>
+
+
     </dependencies>
 
     <build>

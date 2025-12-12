@@ -3,22 +3,22 @@ package com.remaslover.telegrambotaq.dto;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class ArticleDTO {
-        @JsonProperty("source")
-        private SourceDTO source;
-        @JsonProperty("author")
-        private String author;
-        @JsonProperty("title")
-        private String title;
-        @JsonProperty("description")
-        private String description;
-        @JsonProperty("url")
-        private String url;
-        @JsonProperty("urlToImage")
-        private String urlToImage;
-        @JsonProperty("publishedAt")
-        private String publishedAt;
-        @JsonProperty("content")
-        private String content;
+    @JsonProperty("source")
+    private SourceDTO source;
+    @JsonProperty("author")
+    private String author;
+    @JsonProperty("title")
+    private String title;
+    @JsonProperty("description")
+    private String description;
+    @JsonProperty("url")
+    private String url;
+    @JsonProperty("urlToImage")
+    private String urlToImage;
+    @JsonProperty("publishedAt")
+    private String publishedAt;
+    @JsonProperty("content")
+    private String content;
 
     public ArticleDTO(SourceDTO source, String author, String title, String description, String url, String urlToImage, String publishedAt, String content) {
         this.source = source;

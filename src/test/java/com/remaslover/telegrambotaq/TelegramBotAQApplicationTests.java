@@ -15,7 +15,7 @@ class TelegramBotAQApplicationTests {
 
     @Test
     void contextLoads() {
-        assert(applicationContext != null);
+        assert (applicationContext != null);
     }
 
 }

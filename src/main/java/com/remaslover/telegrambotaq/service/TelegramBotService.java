@@ -6,14 +6,12 @@ import com.remaslover.telegrambotaq.enums.Button;
 import com.vdurmont.emoji.EmojiParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.commands.BotCommand;
 import org.telegram.telegrambots.meta.api.objects.commands.scope.BotCommandScopeDefault;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
@@ -79,6 +77,8 @@ public class TelegramBotService extends TelegramLongPollingBot {
                 handleBroadcastMessage(messageText);
             } else if (messageText.startsWith("/ai")) {
                 commandHandler.handleAiRequest(chatId, userId, messageText);
+            } else if (messageText.startsWith("/context")) {
+                commandHandler.handleContextCommand(chatId, userId, messageText);
             } else if (messageText.startsWith("/topnews")) {
                 commandHandler.handleTopNewsCommand(chatId, messageText);
             } else if (messageText.startsWith("/news_category")) {

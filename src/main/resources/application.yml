@@ -50,3 +50,12 @@ news:
     everything:
       default-query: technology
       max-results: 50
+
+context:
+  cache:
+    max-size: 1000
+    ttl-minutes: 30
+    history-size: 10
+    enable-stats: true
+    record-stats: true
+    eviction-policy: size-based
