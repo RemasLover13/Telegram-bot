@@ -95,7 +95,6 @@ public class CommandHandler {
     }
 
 
-
     public void handleRegularCommands(long chatId, Long userId, String messageText, Message message) {
         switch (messageText) {
             case "/start":
@@ -388,7 +387,7 @@ public class CommandHandler {
     public void showContextMenu(long chatId) {
         String menuText = """
                 🧠 *Управление контекстом разговора*
-                
+                                
                 Выберите действие:
                 """;
 

@@ -30,28 +30,65 @@ public class MessageSender {
         return applicationContext.getBean(TelegramLongPollingBot.class);
     }
 
+    /**
+     * Основной метод отправки сообщений
+     * Использует упрощенное гарантированно безопасное экранирование
+     */
+    public void sendMessage(long chatId, String text) {
+        try {
+            String safeText = TelegramMarkdownEscapeUtil.escapeForTelegram(text);
+
+            SendMessage message = new SendMessage();
+            message.setChatId(String.valueOf(chatId));
+            message.setText(safeText);
+            message.setParseMode("MarkdownV2");
+
+            getBot().execute(message);
+            log.debug("✅ Message sent to chat {} ({} chars)", chatId, text.length());
+
+        } catch (TelegramApiException e) {
+            log.warn("MarkdownV2 failed for chat {}, trying plain text: {}",
+                    chatId, e.getMessage());
+
+            sendPlainText(chatId, text);
+
+        } catch (Exception e) {
+            log.error("❌ Failed to send message to chat {}: {}", chatId, e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Отправляет сообщение как обычный текст (без форматирования)
+     */
+    private void sendPlainText(long chatId, String text) {
+        try {
+            SendMessage message = new SendMessage();
+            message.setChatId(String.valueOf(chatId));
+            message.setText(text);
+
+            getBot().execute(message);
+            log.debug("✅ Plain text message sent to chat {}", chatId);
+
+        } catch (Exception e) {
+            log.error("❌ Failed to send plain text to chat {}: {}", chatId, e.getMessage());
+        }
+    }
+
+    /**
+     * Отправляет сообщение с inline клавиатурой
+     */
     public void sendMessageWithInlineKeyboard(long chatId, String text, InlineKeyboardMarkup keyboard) {
         try {
-            SendMessage sendMessage = new SendMessage();
-            sendMessage.setChatId(String.valueOf(chatId));
+            String safeText = TelegramMarkdownEscapeUtil.escapeForTelegram(text);
 
-            String escapedText = TelegramMarkdownEscapeUtil.escapeMarkdownV2(text);
-            sendMessage.setText(escapedText);
-            sendMessage.setParseMode("MarkdownV2");
-            sendMessage.setReplyMarkup(keyboard);
+            SendMessage message = new SendMessage();
+            message.setChatId(String.valueOf(chatId));
+            message.setText(safeText);
+            message.setParseMode("MarkdownV2");
+            message.setReplyMarkup(keyboard);
 
-            try {
-                getBot().execute(sendMessage);
-                log.debug("✅ Message with inline keyboard sent to chat {} using MarkdownV2", chatId);
-
-            } catch (TelegramApiException e) {
-                log.warn("MarkdownV2 failed for inline keyboard, trying HTML: {}", e.getMessage());
-
-                sendMessage.setText(TelegramMarkdownEscapeUtil.escapeHtml(text));
-                sendMessage.setParseMode("HTML");
-                getBot().execute(sendMessage);
-                log.debug("✅ Message with inline keyboard sent to chat {} using HTML", chatId);
-            }
+            getBot().execute(message);
+            log.debug("✅ Message with inline keyboard sent to chat {}", chatId);
 
         } catch (Exception e) {
             log.error("Error sending message with inline keyboard: {}", e.getMessage(), e);
@@ -60,50 +97,6 @@ public class MessageSender {
         }
     }
 
-    public void sendMessage(long chatId, String text) {
-        try {
-            SendMessage message = new SendMessage();
-            message.setChatId(String.valueOf(chatId));
-            message.setText(text);
-
-            message.setParseMode("MarkdownV2");
-
-            try {
-                getBot().execute(message);
-                log.debug("✅ Message sent with MarkdownV2 to chat {} ({} chars)",
-                        chatId, text.length());
-
-            } catch (TelegramApiException e) {
-                log.warn("MarkdownV2 failed for chat {}, trying HTML: {}",
-                        chatId, e.getMessage());
-
-                message.setParseMode("HTML");
-                getBot().execute(message);
-                log.debug("✅ Message sent with HTML to chat {}", chatId);
-
-            }
-
-        } catch (Exception e) {
-            log.error("❌ Failed to send message to chat {}: {}", chatId, e.getMessage(), e);
-        }
-    }
-
-    private void sendMessageWithParseMode(long chatId, String text, String parseMode) {
-        try {
-            SendMessage message = new SendMessage();
-            message.setChatId(String.valueOf(chatId));
-            message.setText(text);
-
-            if (parseMode != null) {
-                message.setParseMode(parseMode);
-            }
-
-            getBot().execute(message);
-
-        } catch (Exception e) {
-            log.error("Failed to send plain message to chat {}: {}", chatId, e.getMessage());
-        }
-    }
 
     public void sendMessageWithKeyboard(long chatId, String text, ReplyKeyboardMarkup keyboard) {
         SendMessage sendMessage = new SendMessage();
@@ -119,7 +112,6 @@ public class MessageSender {
         }
     }
 
-
     public void editMessage(long chatId, int messageId, String newText) {
         EditMessageText message = new EditMessageText();
         message.setChatId(String.valueOf(chatId));
@@ -132,4 +124,8 @@ public class MessageSender {
             log.error("Error editing message: {}", e.getMessage());
         }
     }
+
+
 }
+
+

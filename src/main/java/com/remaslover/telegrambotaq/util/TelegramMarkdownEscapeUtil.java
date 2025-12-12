@@ -14,7 +14,8 @@ public class TelegramMarkdownEscapeUtil {
     };
 
     /**
-     * Полное экранирование для Telegram MarkdownV2
+     * Улучшенное экранирование для Telegram MarkdownV2
+     * Экранирует ВСЕ специальные символы
      */
     public static String escapeMarkdownV2(String text) {
         if (text == null || text.isEmpty()) {
@@ -26,79 +27,106 @@ public class TelegramMarkdownEscapeUtil {
         for (int i = 0; i < text.length(); i++) {
             char c = text.charAt(i);
 
-            switch (c) {
-                case '_':
-                case '*':
-                case '[':
-                case ']':
-                case '(':
-                case ')':
-                case '~':
-                case '`':
-                case '#':
-                case '+':
-                case '-':
-                case '=':
-                case '|':
-                case '{':
-                case '}':
-                case '.':
-                case '!':
-                    result.append('\\').append(c);
-                    break;
-                case '\\':
-                    if (i + 1 < text.length()) {
-                        char next = text.charAt(i + 1);
-                        if (isMarkdownV2SpecialChar(next)) {
-                            result.append('\\').append(next);
-                            i++;
-                        } else {
-                            result.append("\\\\");
-                        }
+            if (isMarkdownV2SpecialChar(c)) {
+                if (i > 0 && text.charAt(i - 1) == '\\') {
+                    int backslashCount = countConsecutiveBackslashes(text, i - 1);
+                    if (backslashCount % 2 == 0) {
+                        result.append('\\').append(c);
                     } else {
-                        result.append("\\\\");
+                        result.append(c);
                     }
-                    break;
-                case '&':
-                    result.append("&amp;");
-                    break;
-                case '<':
-                    result.append("&lt;");
-                    break;
-                case '>':
-                    result.append("&gt;");
-                    break;
-                default:
-                    result.append(c);
+                } else {
+                    result.append('\\').append(c);
+                }
+            } else if (c == '\\') {
+                result.append("\\\\");
+            } else if (c == '&') {
+                result.append("&amp;");
+            } else if (c == '<') {
+                result.append("&lt;");
+            } else if (c == '>') {
+                result.append("&gt;");
+            } else {
+                result.append(c);
             }
         }
 
         return result.toString();
     }
 
+    /**
+     * Проверяет, является ли символ специальным для MarkdownV2
+     */
     private static boolean isMarkdownV2SpecialChar(char c) {
         return c == '_' || c == '*' || c == '[' || c == ']' ||
                c == '(' || c == ')' || c == '~' || c == '`' ||
                c == '>' || c == '#' || c == '+' || c == '-' ||
                c == '=' || c == '|' || c == '{' || c == '}' ||
-               c == '.' || c == '!';
+               c == '.' || c == '!' || c == '\\';
     }
 
     /**
-     * Экранирование для HTML (альтернативный вариант)
+     * Считает количество последовательных обратных слешей
+     */
+    private static int countConsecutiveBackslashes(String text, int position) {
+        int count = 0;
+        while (position >= 0 && text.charAt(position) == '\\') {
+            count++;
+            position--;
+        }
+        return count;
+    }
+
+    /**
+     * Упрощенное экранирование - гарантированно безопасно
+     */
+    public static String escapeForTelegram(String text) {
+        if (text == null || text.isEmpty()) {
+            return "";
+        }
+
+        return text
+                .replace("\\", "\\\\")
+                .replace("_", "\\_")
+                .replace("*", "\\*")
+                .replace("[", "\\[")
+                .replace("]", "\\]")
+                .replace("(", "\\(")
+                .replace(")", "\\)")
+                .replace("~", "\\~")
+                .replace("`", "\\`")
+                .replace(">", "\\>")
+                .replace("#", "\\#")
+                .replace("+", "\\+")
+                .replace("-", "\\-")
+                .replace("=", "\\=")
+                .replace("|", "\\|")
+                .replace("{", "\\{")
+                .replace("}", "\\}")
+                .replace(".", "\\.")
+                .replace("!", "\\!");
+    }
+
+    /**
+     * Экранирование для HTML с дополнительной безопасностью
      */
     public static String escapeHtml(String text) {
         if (text == null || text.isEmpty()) {
             return "";
         }
 
-        return text
+        String escaped = text
                 .replace("&", "&amp;")
                 .replace("<", "&lt;")
                 .replace(">", "&gt;")
                 .replace("\"", "&quot;")
                 .replace("'", "&#39;");
+
+        escaped = escaped.replace("--", "&#45;&#45;");
+
+        return escaped;
     }
+
 
     /**
      * Умное экранирование MarkdownV2:
@@ -313,31 +341,4 @@ public class TelegramMarkdownEscapeUtil {
                 .replace("#", "\\#");
     }
 
-    /**
-     * Очистка двойного экранирования
-     */
-    public static String cleanDoubleEscaping(String text) {
-        if (text == null) return "";
-
-        return text
-                .replace("\\\\\\*", "\\*")
-                .replace("\\\\\\_", "\\_")
-                .replace("\\\\\\\\", "\\\\")
-                .replace("\\\\#", "\\#")
-                .replace("\\\\`", "\\`")
-                .replace("\\\\>", "\\>")
-                .replace("\\\\~", "\\~")
-                .replace("\\\\[", "\\[")
-                .replace("\\\\]", "\\]")
-                .replace("\\\\(", "\\(")
-                .replace("\\\\)", "\\)")
-                .replace("\\\\+", "\\+")
-                .replace("\\\\-", "\\-")
-                .replace("\\\\=", "\\=")
-                .replace("\\\\|", "\\|")
-                .replace("\\\\{", "\\{")
-                .replace("\\\\}", "\\}")
-                .replace("\\\\.", "\\.")
-                .replace("\\\\!", "\\!");
-    }
 }

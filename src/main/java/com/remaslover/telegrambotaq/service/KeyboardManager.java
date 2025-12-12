@@ -1,6 +1,5 @@
 package com.remaslover.telegrambotaq.service;
 
-import com.remaslover.telegrambotaq.enums.Button;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.meta.api.objects.commands.BotCommand;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
