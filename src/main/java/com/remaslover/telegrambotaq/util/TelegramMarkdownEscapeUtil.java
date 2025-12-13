@@ -6,7 +6,6 @@ import org.springframework.stereotype.Component;
 public class TelegramMarkdownEscapeUtil {
 
 
-    // Все специальные символы для Telegram MarkdownV2
     private static final char[] MARKDOWN_V2_SPECIAL_CHARS = {
             '_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'
     };
@@ -25,24 +24,18 @@ public class TelegramMarkdownEscapeUtil {
         for (int i = 0; i < text.length(); i++) {
             char c = text.charAt(i);
 
-            // Проверяем, является ли символ специальным
             if (isMarkdownV2SpecialChar(c)) {
-                // Проверяем, не экранирован ли уже
                 if (i > 0 && text.charAt(i - 1) == '\\') {
                     int backslashCount = countConsecutiveBackslashes(text, i - 1);
-                    // Если четное количество слешей - значит не экранирован
                     if (backslashCount % 2 == 0) {
                         result.append('\\').append(c);
                     } else {
-                        // Уже экранирован
                         result.append(c);
                     }
                 } else {
-                    // Не экранирован - экранируем
                     result.append('\\').append(c);
                 }
             } else if (c == '\\') {
-                // Обработка обратного слеша
                 result.append("\\\\");
             } else {
                 result.append(c);
@@ -84,7 +77,6 @@ public class TelegramMarkdownEscapeUtil {
             return "";
         }
 
-        // Экранируем ВСЕ специальные символы
         return text
                 .replace("\\", "\\\\")
                 .replace("_", "\\_")
@@ -116,17 +108,58 @@ public class TelegramMarkdownEscapeUtil {
         }
 
         String cleaned = text
-                .replace("\\\\", "\\")      // Двойные слеши
-                .replace("\\!", "!")        // Восклицательные знаки
-                .replace("\\.", ".")        // Точки
-                .replace("\\,", ",")        // Запятые
-                .replace("\\:", ":")        // Двоеточия
-                .replace("\\;", ";")        // Точки с запятой
-                .replace("\\-", "-")        // Дефисы
-                .replace("\\'", "'")        // Апострофы
-                .replace("\\\"", "\"");     // Кавычки
+                .replace("\\\\", "\\")
+                .replace("\\!", "!")
+                .replace("\\.", ".")
+                .replace("\\,", ",")
+                .replace("\\:", ":")
+                .replace("\\;", ";")
+                .replace("\\-", "-")
+                .replace("\\'", "'")
+                .replace("\\\"", "\"");
 
         return cleaned;
+    }
+
+
+    /**
+     * Минимальное экранирование только самых проблемных символов
+     */
+    public static String escapeMinimal(String text) {
+        if (text == null || text.isEmpty()) {
+            return "";
+        }
+
+        return text
+                .replace("\\", "\\\\")
+                .replace("_", "\\_")
+                .replace("*", "\\*")
+                .replace("[", "\\[")
+                .replace("]", "\\]")
+                .replace("(", "\\(")
+                .replace(")", "\\)")
+                .replace("~", "\\~")
+                .replace("`", "\\`")
+                .replace(">", "\\>")
+                .replace("#", "\\#");
+    }
+
+    /**
+     * Умное экранирование MarkdownV2 (сохраняет форматирование)
+     */
+    public static String escapeMarkdownSmart(String text) {
+        if (text == null || text.isEmpty()) {
+            return "";
+        }
+
+        return escapeForTelegram(text);
+    }
+
+    /**
+     * Экранирование для MarkdownV2 (аналогично escapeForTelegram)
+     */
+    public static String escapeMarkdownV2(String text) {
+        return escapeAllMarkdownChars(text);
     }
 
 
