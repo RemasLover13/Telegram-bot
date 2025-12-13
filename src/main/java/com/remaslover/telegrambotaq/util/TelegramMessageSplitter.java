@@ -19,6 +19,87 @@ public class TelegramMessageSplitter {
     private static final int MIN_PART_LENGTH = 100;
 
     /**
+     * Простое разбиение на части
+     */
+    public List<String> splitMessage(String text) {
+        List<String> parts = new ArrayList<>();
+
+        if (text == null || text.isEmpty()) {
+            return parts;
+        }
+
+        try {
+            String safeText = TelegramMarkdownEscapeUtil.escapeAllMarkdownChars(text);
+
+            if (safeText.length() <= SAFE_MESSAGE_LENGTH) {
+                parts.add(safeText);
+                return parts;
+            }
+
+            parts = splitIntoChunks(safeText, SAFE_MESSAGE_LENGTH);
+
+            log.info("Split message into {} parts", parts.size());
+
+            return parts;
+
+        } catch (Exception e) {
+            log.error("Error splitting message: {}", e.getMessage(), e);
+
+            return List.of(TelegramMarkdownEscapeUtil.escapeAllMarkdownChars(text));
+        }
+    }
+
+    /**
+     * Разбивает текст на чанки
+     */
+    private List<String> splitIntoChunks(String text, int chunkSize) {
+        List<String> chunks = new ArrayList<>();
+
+        int start = 0;
+        while (start < text.length()) {
+            int end = Math.min(start + chunkSize, text.length());
+
+            if (end < text.length()) {
+                int sentenceEnd = findSentenceEnd(text, start + chunkSize / 2, end);
+                if (sentenceEnd > start + chunkSize / 2) {
+                    end = sentenceEnd;
+                }
+            }
+
+            chunks.add(text.substring(start, end).trim());
+            start = end;
+
+            while (start < text.length() && Character.isWhitespace(text.charAt(start))) {
+                start++;
+            }
+        }
+
+        return chunks;
+    }
+
+    /**
+     * Находит конец предложения
+     */
+    private int findSentenceEnd(String text, int from, int to) {
+        int end = to;
+
+        for (int i = from; i < to; i++) {
+            char c = text.charAt(i);
+            if (c == '.' || c == '!' || c == '?' || c == '\n') {
+                int j = i + 1;
+                while (j < text.length() && Character.isWhitespace(text.charAt(j))) {
+                    j++;
+                }
+                if (j <= to) {
+                    end = j;
+                }
+            }
+        }
+
+        return end;
+    }
+
+    /**
      * Простое и надежное разбиение сообщений
      */
     public List<String> splitMessageSmart(String text) {
@@ -99,33 +180,6 @@ public class TelegramMessageSplitter {
         return result;
     }
 
-    /**
-     * Разбивает текст на чанки фиксированного размера
-     */
-    private List<String> splitIntoChunks(String text, int chunkSize) {
-        List<String> chunks = new ArrayList<>();
-
-        int start = 0;
-        while (start < text.length()) {
-            int end = Math.min(start + chunkSize, text.length());
-
-            if (end < text.length() && !Character.isWhitespace(text.charAt(end))) {
-                int lastSpace = text.lastIndexOf(' ', end);
-                if (lastSpace > start + chunkSize / 2) {
-                    end = lastSpace;
-                }
-            }
-
-            chunks.add(text.substring(start, end).trim());
-            start = end;
-
-            while (start < text.length() && Character.isWhitespace(text.charAt(start))) {
-                start++;
-            }
-        }
-
-        return chunks;
-    }
 
     /**
      * Простое разбиение (fallback)

@@ -29,12 +29,28 @@ public class MessageSender {
     public TelegramLongPollingBot getBot() {
         return applicationContext.getBean(TelegramLongPollingBot.class);
     }
+
     /**
-     * Основной метод отправки сообщений
+     * Надежный метод отправки сообщений с попытками разных форматов
      */
     public void sendMessage(long chatId, String text) {
+        if (trySendWithMarkdownV2(chatId, text)) {
+            return;
+        }
+
+        if (trySendWithHtml(chatId, text)) {
+            return;
+        }
+
+        sendPlainText(chatId, text);
+    }
+
+    /**
+     * Попытка отправки с MarkdownV2
+     */
+    private boolean trySendWithMarkdownV2(long chatId, String text) {
         try {
-            String safeText = TelegramMarkdownEscapeUtil.escapeForTelegram(text);
+            String safeText = TelegramMarkdownEscapeUtil.escapeAllMarkdownChars(text);
 
             SendMessage message = new SendMessage();
             message.setChatId(String.valueOf(chatId));
@@ -42,17 +58,149 @@ public class MessageSender {
             message.setParseMode("MarkdownV2");
 
             getBot().execute(message);
-            log.debug("✅ Message sent to chat {} ({} chars)", chatId, text.length());
-
-        } catch (TelegramApiException e) {
-            log.warn("MarkdownV2 failed for chat {}, trying plain text: {}",
-                    chatId, e.getMessage());
-
-            sendAiResponseWithFallback(chatId, text);
+            log.debug("✅ Message sent with MarkdownV2 to chat {} ({} chars)",
+                    chatId, text.length());
+            return true;
 
         } catch (Exception e) {
-            log.error("❌ Failed to send message to chat {}: {}", chatId, e.getMessage(), e);
+            log.debug("MarkdownV2 failed for chat {}: {}", chatId, e.getMessage());
+            return false;
         }
+    }
+
+    /**
+     * Попытка отправки с HTML
+     */
+    private boolean trySendWithHtml(long chatId, String text) {
+        try {
+            String htmlText = TelegramMarkdownEscapeUtil.convertToHtml(text);
+
+            SendMessage message = new SendMessage();
+            message.setChatId(String.valueOf(chatId));
+            message.setText(htmlText);
+            message.setParseMode("HTML");
+
+            getBot().execute(message);
+            log.debug("✅ Message sent with HTML to chat {} ({} chars)",
+                    chatId, text.length());
+            return true;
+
+        } catch (Exception e) {
+            log.debug("HTML failed for chat {}: {}", chatId, e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Отправляет сообщение как обычный текст
+     */
+    private void sendPlainText(long chatId, String text) {
+        try {
+            // Минимальное экранирование для plain text
+            String plainText = text
+                    .replace("\\", "\\\\")
+                    .replace("_", "_")
+                    .replace("*", "*")
+                    .replace("[", "[")
+                    .replace("]", "]");
+
+            SendMessage message = new SendMessage();
+            message.setChatId(String.valueOf(chatId));
+            message.setText(plainText);
+            // Без parseMode - обычный текст
+
+            getBot().execute(message);
+            log.debug("✅ Plain text message sent to chat {}", chatId);
+
+        } catch (Exception e) {
+            log.error("❌ Failed to send plain text to chat {}: {}", chatId, e.getMessage());
+        }
+    }
+
+    /**
+     * Специальный метод для отправки AI-ответов
+     */
+    public void sendAiResponse(long chatId, String text) {
+        try {
+            // Пробуем разные форматы для AI-ответов
+            if (trySendAiWithMarkdown(chatId, text)) {
+                return;
+            }
+
+            if (trySendAiWithHtml(chatId, text)) {
+                return;
+            }
+
+            // Fallback на обычную отправку
+            sendMessage(chatId, text);
+
+        } catch (Exception e) {
+            log.error("❌ Failed to send AI response to chat {}: {}", chatId, e.getMessage(), e);
+            sendMessage(chatId, text);
+        }
+    }
+
+    /**
+     * Попытка отправки AI-ответа с Markdown
+     */
+    private boolean trySendAiWithMarkdown(long chatId, String text) {
+        try {
+            // Очищаем лишнее экранирование от AI
+            String cleaned = cleanAiText(text);
+            String safeText = TelegramMarkdownEscapeUtil.escapeAllMarkdownChars(cleaned);
+
+            SendMessage message = new SendMessage();
+            message.setChatId(String.valueOf(chatId));
+            message.setText(safeText);
+            message.setParseMode("MarkdownV2");
+
+            getBot().execute(message);
+            log.debug("✅ AI response sent with MarkdownV2 to chat {}", chatId);
+            return true;
+
+        } catch (Exception e) {
+            log.debug("AI Markdown failed for chat {}: {}", chatId, e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Попытка отправки AI-ответа с HTML
+     */
+    private boolean trySendAiWithHtml(long chatId, String text) {
+        try {
+            String htmlText = TelegramMarkdownEscapeUtil.convertToHtml(text);
+
+            SendMessage message = new SendMessage();
+            message.setChatId(String.valueOf(chatId));
+            message.setText(htmlText);
+            message.setParseMode("HTML");
+
+            getBot().execute(message);
+            log.debug("✅ AI response sent with HTML to chat {}", chatId);
+            return true;
+
+        } catch (Exception e) {
+            log.debug("AI HTML failed for chat {}: {}", chatId, e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Очистка текста от AI от лишнего экранирования
+     */
+    private String cleanAiText(String text) {
+        if (text == null) return "";
+
+        // AI часто добавляет лишние экранирования
+        // Убираем их, но сохраняем важное форматирование
+        return text
+                .replace("\\\\\\*", "\\*")
+                .replace("\\\\\\_", "\\_")
+                .replace("\\\\\\\\", "\\\\")
+                .replace("\\\\`", "\\`")
+                .replace("\\\\.", "\\.")
+                .replace("\\\\!", "\\!");
     }
 
     /**
@@ -77,47 +225,6 @@ public class MessageSender {
         }
     }
 
-    /**
-     * Специальный метод для отправки AI-ответов
-     */
-    public void sendAiResponse(long chatId, String text) {
-        try {
-            String preparedText = TelegramMarkdownEscapeUtil.prepareAiResponse(text);
-
-            SendMessage message = new SendMessage();
-            message.setChatId(String.valueOf(chatId));
-            message.setText(preparedText);
-            message.setParseMode("MarkdownV2");
-
-            getBot().execute(message);
-            log.debug("✅ AI response sent to chat {} ({} chars)", chatId, text.length());
-
-        } catch (TelegramApiException e) {
-            log.warn("AI response Markdown failed, trying prepared text: {}", e.getMessage());
-
-            sendMessage(chatId, text);
-
-        } catch (Exception e) {
-            log.error("❌ Failed to send AI response to chat {}: {}", chatId, e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Отправляет сообщение как обычный текст (без форматирования)
-     */
-    private void sendPlainText(long chatId, String text) {
-        try {
-            SendMessage message = new SendMessage();
-            message.setChatId(String.valueOf(chatId));
-            message.setText(text);
-
-            getBot().execute(message);
-            log.debug("✅ Plain text message sent to chat {}", chatId);
-
-        } catch (Exception e) {
-            log.error("❌ Failed to send plain text to chat {}: {}", chatId, e.getMessage());
-        }
-    }
 
     /**
      * Отправляет сообщение с inline клавиатурой

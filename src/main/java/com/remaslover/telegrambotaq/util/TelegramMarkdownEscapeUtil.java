@@ -11,10 +11,8 @@ public class TelegramMarkdownEscapeUtil {
     };
 
     /**
-     * Умное экранирование для красивого форматирования:
-     * - Сохраняет блоки кода ```code```
-     * - Сохраняет inline код `code`
-     * - Экранирует только символы вне блоков кода
+     * Полное экранирование для Telegram MarkdownV2
+     * Экранирует ВСЕ специальные символы, включая ! и .
      */
     public static String escapeForTelegram(String text) {
         if (text == null || text.isEmpty()) {
@@ -52,35 +50,35 @@ public class TelegramMarkdownEscapeUtil {
                 continue;
             }
 
-            switch (currentChar) {
-                case '\\':
-                    result.append("\\\\");
-                    break;
-                case '_':
-                case '*':
-                case '[':
-                case ']':
-                case '(':
-                case ')':
-                case '~':
-                    result.append('\\').append(currentChar);
-                    break;
-                case '&':
-                    result.append("&amp;");
-                    break;
-                case '<':
-                    result.append("&lt;");
-                    break;
-                case '>':
-                    result.append("&gt;");
-                    break;
-                default:
-                    result.append(currentChar);
+            if (isMarkdownV2SpecialChar(currentChar)) {
+                result.append('\\').append(currentChar);
+            } else if (currentChar == '\\') {
+                result.append("\\\\");
+            } else if (currentChar == '&') {
+                result.append("&amp;");
+            } else if (currentChar == '<') {
+                result.append("&lt;");
+            } else if (currentChar == '>') {
+                result.append("&gt;");
+            } else {
+                result.append(currentChar);
             }
             i++;
         }
 
         return result.toString();
+    }
+
+    /**
+     * Проверяет, является ли символ специальным для MarkdownV2
+     * Включая ! и .
+     */
+    private static boolean isMarkdownV2SpecialChar(char c) {
+        return c == '_' || c == '*' || c == '[' || c == ']' ||
+               c == '(' || c == ')' || c == '~' || c == '`' ||
+               c == '>' || c == '#' || c == '+' || c == '-' ||
+               c == '=' || c == '|' || c == '{' || c == '}' ||
+               c == '.' || c == '!';
     }
 
     /**
@@ -108,6 +106,62 @@ public class TelegramMarkdownEscapeUtil {
 
         return inCodeBlock;
     }
+
+    /**
+     * Упрощенная версия для гарантированной работы
+     */
+    public static String escapeAllMarkdownChars(String text) {
+        if (text == null || text.isEmpty()) {
+            return "";
+        }
+
+        return text
+                .replace("\\", "\\\\")
+                .replace("_", "\\_")
+                .replace("*", "\\*")
+                .replace("[", "\\[")
+                .replace("]", "\\]")
+                .replace("(", "\\(")
+                .replace(")", "\\)")
+                .replace("~", "\\~")
+                .replace("`", "\\`")
+                .replace(">", "\\>")
+                .replace("#", "\\#")
+                .replace("+", "\\+")
+                .replace("-", "\\-")
+                .replace("=", "\\=")
+                .replace("|", "\\|")
+                .replace("{", "\\{")
+                .replace("}", "\\}")
+                .replace(".", "\\.")
+                .replace("!", "\\!");
+    }
+
+    /**
+     * Альтернативный подход: отправка как HTML
+     */
+    public static String convertToHtml(String text) {
+        if (text == null || text.isEmpty()) {
+            return "";
+        }
+
+        String html = text
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+
+                .replace("**", "<b>")
+                .replace("__", "<i>")
+                .replace("\n", "<br>")
+
+                // Блоки кода
+                .replace("```", "<pre>")
+                .replace("`", "<code>");
+
+        return html;
+    }
+
 
     /**
      * Упрощенное экранирование для обычного текста (без кода)
@@ -215,16 +269,6 @@ public class TelegramMarkdownEscapeUtil {
         return result.toString();
     }
 
-    /**
-     * Проверяет, является ли символ специальным для MarkdownV2
-     */
-    private static boolean isMarkdownV2SpecialChar(char c) {
-        return c == '_' || c == '*' || c == '[' || c == ']' ||
-               c == '(' || c == ')' || c == '~' || c == '`' ||
-               c == '>' || c == '#' || c == '+' || c == '-' ||
-               c == '=' || c == '|' || c == '{' || c == '}' ||
-               c == '.' || c == '!' || c == '\\';
-    }
 
     /**
      * Считает количество последовательных обратных слешей

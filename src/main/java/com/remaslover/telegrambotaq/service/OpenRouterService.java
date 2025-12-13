@@ -121,7 +121,7 @@ public class OpenRouterService {
      */
     private List<String> splitMessageForTelegram(String text) {
         try {
-            List<String> parts = telegramMessageSplitter.splitMessageSmart(text);
+            List<String> parts = telegramMessageSplitter.splitMessage(text);
 
             log.debug("Split text into {} parts", parts.size());
 
@@ -130,7 +130,7 @@ public class OpenRouterService {
         } catch (Exception e) {
             log.error("Error splitting message for Telegram: {}", e.getMessage(), e);
 
-            String safeText = TelegramMarkdownEscapeUtil.escapeForTelegram(text);
+            String safeText = TelegramMarkdownEscapeUtil.escapeAllMarkdownChars(text);
             return List.of(safeText);
         }
     }
