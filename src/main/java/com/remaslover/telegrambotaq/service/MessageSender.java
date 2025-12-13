@@ -135,7 +135,15 @@ public class MessageSender {
     public void sendAiResponse(long chatId, String text) {
         try {
             String cleanedText = TelegramMarkdownEscapeUtil.cleanAiResponse(text);
-            String safeText = TelegramMarkdownEscapeUtil.escapeForTelegram(cleanedText);
+            String safeText = TelegramMarkdownEscapeUtil.escapeAllMarkdownChars(cleanedText);
+
+            char[] specialChars = {'_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'};
+            for (char c : specialChars) {
+                if (safeText.contains(String.valueOf(c)) &&
+                    !safeText.contains("\\" + c)) {
+                    log.warn("⚠️ Unescaped special char '{}' in text for chat {}", c, chatId);
+                }
+            }
 
             SendMessage message = new SendMessage();
             message.setChatId(String.valueOf(chatId));
@@ -147,7 +155,25 @@ public class MessageSender {
 
         } catch (Exception e) {
             log.error("❌ Failed to send AI response to chat {}: {}", chatId, e.getMessage(), e);
-            sendMessage(chatId, text);
+
+            sendPlainTextNoMarkdown(chatId, text);
+        }
+    }
+
+    /**
+     * Отправляет сообщение как обычный текст (без Markdown)
+     */
+    public void sendPlainTextNoMarkdown(long chatId, String text) {
+        try {
+            SendMessage message = new SendMessage();
+            message.setChatId(String.valueOf(chatId));
+            message.setText(text);
+
+            getBot().execute(message);
+            log.debug("✅ Plain text (no markdown) sent to chat {}", chatId);
+
+        } catch (Exception e) {
+            log.error("❌ Failed to send plain text to chat {}: {}", chatId, e.getMessage());
         }
     }
 

@@ -19,54 +19,7 @@ public class TelegramMarkdownEscapeUtil {
             return "";
         }
 
-        StringBuilder result = new StringBuilder();
-
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-
-            if (isMarkdownV2SpecialChar(c)) {
-                if (i > 0 && text.charAt(i - 1) == '\\') {
-                    int backslashCount = countConsecutiveBackslashes(text, i - 1);
-                    if (backslashCount % 2 == 0) {
-                        result.append('\\').append(c);
-                    } else {
-                        result.append(c);
-                    }
-                } else {
-                    result.append('\\').append(c);
-                }
-            } else if (c == '\\') {
-                result.append("\\\\");
-            } else {
-                result.append(c);
-            }
-        }
-
-        return result.toString();
-    }
-
-    /**
-     * Проверяет, является ли символ специальным для MarkdownV2
-     */
-    private static boolean isMarkdownV2SpecialChar(char c) {
-        for (char special : MARKDOWN_V2_SPECIAL_CHARS) {
-            if (c == special) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Считает количество последовательных обратных слешей
-     */
-    private static int countConsecutiveBackslashes(String text, int position) {
-        int count = 0;
-        while (position >= 0 && text.charAt(position) == '\\') {
-            count++;
-            position--;
-        }
-        return count;
+        return escapeAllMarkdownChars(text);
     }
 
     /**
@@ -97,6 +50,31 @@ public class TelegramMarkdownEscapeUtil {
                 .replace("}", "\\}")
                 .replace(".", "\\.")
                 .replace("!", "\\!");
+    }
+
+
+    /**
+     * Проверяет, является ли символ специальным для MarkdownV2
+     */
+    private static boolean isMarkdownV2SpecialChar(char c) {
+        for (char special : MARKDOWN_V2_SPECIAL_CHARS) {
+            if (c == special) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Считает количество последовательных обратных слешей
+     */
+    private static int countConsecutiveBackslashes(String text, int position) {
+        int count = 0;
+        while (position >= 0 && text.charAt(position) == '\\') {
+            count++;
+            position--;
+        }
+        return count;
     }
 
     /**
