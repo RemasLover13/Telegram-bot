@@ -25,7 +25,14 @@ public class MessageQueueService {
      * Ставит сообщение в очередь на отправку
      */
     public void enqueueMessage(long chatId, String text, int delayMs) {
-        messageQueue.offer(new MessageTask(chatId, text, delayMs));
+        messageQueue.offer(new MessageTask(chatId, text, delayMs, false));
+    }
+
+    /**
+     * Ставит AI-ответ в очередь на отправку (использует специальный метод)
+     */
+    public void enqueueAiResponse(long chatId, String text, int delayMs) {
+        messageQueue.offer(new MessageTask(chatId, text, delayMs, true));
     }
 
     /**
@@ -34,7 +41,18 @@ public class MessageQueueService {
     public void enqueueMessages(long chatId, List<String> messages, int initialDelayMs) {
         int delay = initialDelayMs;
         for (String message : messages) {
-            messageQueue.offer(new MessageTask(chatId, message, delay));
+            messageQueue.offer(new MessageTask(chatId, message, delay, false));
+            delay += 1500;
+        }
+    }
+
+    /**
+     * Ставит несколько AI-ответов в очередь
+     */
+    public void enqueueAiResponses(long chatId, List<String> responses, int initialDelayMs) {
+        int delay = initialDelayMs;
+        for (String response : responses) {
+            messageQueue.offer(new MessageTask(chatId, response, delay, true));
             delay += 1500;
         }
     }
@@ -52,10 +70,14 @@ public class MessageQueueService {
                         Thread.sleep(task.delayMs);
                     }
 
-                    messageSender.sendMessage(task.chatId, task.text);
+                    if (task.isAiResponse) {
+                        messageSender.sendAiResponse(task.chatId, task.text);
+                    } else {
+                        messageSender.sendMessage(task.chatId, task.text);
+                    }
 
-                    log.debug("Sent queued message to chat {} (delay: {}ms)",
-                            task.chatId, task.delayMs);
+                    log.debug("Sent queued message to chat {} (delay: {}ms, isAiResponse: {})",
+                            task.chatId, task.delayMs, task.isAiResponse);
 
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
@@ -71,6 +93,6 @@ public class MessageQueueService {
     /**
      * Задача отправки сообщения
      */
-    private record MessageTask(long chatId, String text, int delayMs) {
+    private record MessageTask(long chatId, String text, int delayMs, boolean isAiResponse) {
     }
 }

@@ -409,9 +409,18 @@ public class CommandHandler {
 
             switch (subCommand) {
                 case "clear":
+                    rateLimitService.debugPrintState(userId);
+                    int before = rateLimitService.getUsedAiRequests(userId);
+
                     openRouterService.clearConversationHistory(userId);
+
+                    rateLimitService.debugPrintState(userId);
+                    int after = rateLimitService.getUsedAiRequests(userId);
+
+                    log.info("🧹 Context cleared for user {} - AI requests: before={}, after={}",
+                            userId, before, after);
+
                     sendMessage(chatId, "✅ История разговора очищена");
-                    log.info("User {} cleared conversation history", userId);
                     break;
 
                 case "show":
@@ -601,10 +610,9 @@ public class CommandHandler {
 
                 messageQueueService.enqueueMessage(chatId, notice, 1000);
 
-                for (int i = 1; i < responseParts.size(); i++) {
-                    final int partIndex = i;
-                    messageQueueService.enqueueMessage(chatId, responseParts.get(i), 1000 + (i * 1500));
-                }
+                messageQueueService.enqueueAiResponses(chatId,
+                        responseParts.subList(1, responseParts.size()),
+                        2000);
             }
 
             rateLimitService.registerAiRequest(userId);

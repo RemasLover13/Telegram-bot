@@ -6,6 +6,8 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Утилита для разбивки длинных сообщений для Telegram
@@ -19,7 +21,7 @@ public class TelegramMessageSplitter {
     private static final int MIN_PART_LENGTH = 100;
 
     /**
-     * Простое разбиение на части
+     * Основной метод для разбиения AI-ответов
      */
     public List<String> splitMessage(String text) {
         List<String> parts = new ArrayList<>();
@@ -29,14 +31,16 @@ public class TelegramMessageSplitter {
         }
 
         try {
-            String safeText = TelegramMarkdownEscapeUtil.escapeAllMarkdownChars(text);
+            String cleanedText = TelegramMarkdownEscapeUtil.cleanAiResponse(text);
+
+            String safeText = TelegramMarkdownEscapeUtil.escapeForTelegram(cleanedText);
 
             if (safeText.length() <= SAFE_MESSAGE_LENGTH) {
                 parts.add(safeText);
                 return parts;
             }
 
-            parts = splitIntoChunks(safeText, SAFE_MESSAGE_LENGTH);
+            parts = splitPreservingCodeBlocks(safeText);
 
             log.info("Split message into {} parts", parts.size());
 
@@ -45,101 +49,96 @@ public class TelegramMessageSplitter {
         } catch (Exception e) {
             log.error("Error splitting message: {}", e.getMessage(), e);
 
-            return List.of(TelegramMarkdownEscapeUtil.escapeAllMarkdownChars(text));
+            return List.of(TelegramMarkdownEscapeUtil.escapeMinimal(text));
         }
     }
 
     /**
-     * Разбивает текст на чанки
+     * Разбивает текст, сохраняя блоки кода
      */
-    private List<String> splitIntoChunks(String text, int chunkSize) {
-        List<String> chunks = new ArrayList<>();
-
-        int start = 0;
-        while (start < text.length()) {
-            int end = Math.min(start + chunkSize, text.length());
-
-            if (end < text.length()) {
-                int sentenceEnd = findSentenceEnd(text, start + chunkSize / 2, end);
-                if (sentenceEnd > start + chunkSize / 2) {
-                    end = sentenceEnd;
-                }
-            }
-
-            chunks.add(text.substring(start, end).trim());
-            start = end;
-
-            while (start < text.length() && Character.isWhitespace(text.charAt(start))) {
-                start++;
-            }
-        }
-
-        return chunks;
-    }
-
-    /**
-     * Находит конец предложения
-     */
-    private int findSentenceEnd(String text, int from, int to) {
-        int end = to;
-
-        for (int i = from; i < to; i++) {
-            char c = text.charAt(i);
-            if (c == '.' || c == '!' || c == '?' || c == '\n') {
-                int j = i + 1;
-                while (j < text.length() && Character.isWhitespace(text.charAt(j))) {
-                    j++;
-                }
-                if (j <= to) {
-                    end = j;
-                }
-            }
-        }
-
-        return end;
-    }
-
-    /**
-     * Простое и надежное разбиение сообщений
-     */
-    public List<String> splitMessageSmart(String text) {
+    private List<String> splitPreservingCodeBlocks(String text) {
         List<String> parts = new ArrayList<>();
 
-        if (text == null || text.isEmpty()) {
-            return parts;
+        List<CodeBlockInfo> codeBlocks = findCodeBlocks(text);
+
+        if (codeBlocks.isEmpty()) {
+            return splitByParagraphs(text);
         }
 
-        try {
-            String safeText = TelegramMarkdownEscapeUtil.escapeForTelegram(text);
+        int currentPos = 0;
+        StringBuilder currentPart = new StringBuilder();
 
-            if (safeText.length() <= SAFE_MESSAGE_LENGTH) {
-                parts.add(safeText);
-                return parts;
+        for (CodeBlockInfo block : codeBlocks) {
+            String beforeCode = text.substring(currentPos, block.start);
+
+            if (currentPart.length() + beforeCode.length() > SAFE_MESSAGE_LENGTH &&
+                currentPart.length() > MIN_PART_LENGTH) {
+                parts.add(currentPart.toString());
+                currentPart = new StringBuilder();
             }
 
-            parts = splitByParagraphs(safeText);
+            if (currentPart.length() > 0 && !beforeCode.isEmpty()) {
+                currentPart.append("\n\n");
+            }
+            currentPart.append(beforeCode);
 
-            parts = ensurePartsSize(parts);
+            if (currentPart.length() + block.content.length() > SAFE_MESSAGE_LENGTH &&
+                currentPart.length() > MIN_PART_LENGTH) {
+                parts.add(currentPart.toString());
+                currentPart = new StringBuilder();
+            }
 
-            log.info("Split message into {} parts", parts.size());
+            if (currentPart.length() > 0) {
+                currentPart.append("\n\n");
+            }
+            currentPart.append(block.content);
 
-            return parts;
-
-        } catch (Exception e) {
-            log.error("Error in splitMessageSmart: {}", e.getMessage(), e);
-
-            return splitMessageSimple(text);
+            currentPos = block.end;
         }
+
+        if (currentPos < text.length()) {
+            String remaining = text.substring(currentPos);
+            if (currentPart.length() + remaining.length() > SAFE_MESSAGE_LENGTH &&
+                currentPart.length() > MIN_PART_LENGTH) {
+                parts.add(currentPart.toString());
+                currentPart = new StringBuilder();
+            }
+
+            if (currentPart.length() > 0 && !remaining.isEmpty()) {
+                currentPart.append("\n\n");
+            }
+            currentPart.append(remaining);
+        }
+
+        if (currentPart.length() > 0) {
+            parts.add(currentPart.toString());
+        }
+
+        return parts;
     }
 
     /**
-     * Разбивает текст по параграфам
+     * Находит блоки кода в тексте
+     */
+    private List<CodeBlockInfo> findCodeBlocks(String text) {
+        List<CodeBlockInfo> blocks = new ArrayList<>();
+        Pattern pattern = Pattern.compile("```[\\s\\S]*?```");
+        Matcher matcher = pattern.matcher(text);
+
+        while (matcher.find()) {
+            blocks.add(new CodeBlockInfo(matcher.group(), matcher.start(), matcher.end()));
+        }
+
+        return blocks;
+    }
+
+    /**
+     * Разбивает по параграфам
      */
     private List<String> splitByParagraphs(String text) {
         List<String> parts = new ArrayList<>();
 
         String[] paragraphs = text.split("\\n\\n");
-
         StringBuilder currentPart = new StringBuilder();
 
         for (String paragraph : paragraphs) {
@@ -164,56 +163,17 @@ public class TelegramMessageSplitter {
     }
 
     /**
-     * Проверяет размер частей и при необходимости разбивает дальше
+     * Вспомогательный класс для информации о блоке кода
      */
-    private List<String> ensurePartsSize(List<String> parts) {
-        List<String> result = new ArrayList<>();
+    private static class CodeBlockInfo {
+        String content;
+        int start;
+        int end;
 
-        for (String part : parts) {
-            if (part.length() <= SAFE_MESSAGE_LENGTH) {
-                result.add(part);
-            } else {
-                result.addAll(splitIntoChunks(part, SAFE_MESSAGE_LENGTH));
-            }
+        CodeBlockInfo(String content, int start, int end) {
+            this.content = content;
+            this.start = start;
+            this.end = end;
         }
-
-        return result;
-    }
-
-
-    /**
-     * Простое разбиение (fallback)
-     */
-    public List<String> splitMessageSimple(String text) {
-        List<String> parts = new ArrayList<>();
-
-        if (text == null || text.isEmpty()) {
-            return parts;
-        }
-
-        String safeText = TelegramMarkdownEscapeUtil.escapeForTelegram(text);
-
-        if (safeText.length() <= SAFE_MESSAGE_LENGTH) {
-            parts.add(safeText);
-            return parts;
-        }
-
-        int chunkSize = SAFE_MESSAGE_LENGTH;
-        int totalLength = safeText.length();
-
-        for (int i = 0; i < totalLength; i += chunkSize) {
-            int end = Math.min(i + chunkSize, totalLength);
-
-            if (end < totalLength && !Character.isWhitespace(safeText.charAt(end))) {
-                int lastSpace = safeText.lastIndexOf(' ', end);
-                if (lastSpace > i + chunkSize / 2) {
-                    end = lastSpace;
-                }
-            }
-
-            parts.add(safeText.substring(i, end).trim());
-        }
-
-        return parts;
     }
 }

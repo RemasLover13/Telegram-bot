@@ -7,8 +7,10 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 @Service
 public class RateLimitService {
@@ -19,17 +21,38 @@ public class RateLimitService {
     private static final int DAILY_FREE_LIMIT = 5;
 
     /**
+     * Отладочный метод - показывает все записи
+     */
+    public void debugPrintAll() {
+        log.info("=== RateLimitService Debug ===");
+        log.info("Total users in map: {}", userUsage.size());
+        userUsage.forEach((userId, usage) -> {
+            log.info("User {}: count={}, lastDate={}",
+                    userId, usage.dailyCount, usage.lastRequestDate);
+        });
+        log.info("=== End Debug ===");
+    }
+
+    /**
      * Проверяет, может ли пользователь сделать AI запрос
      */
     public boolean canMakeAiRequest(Long userId) {
-        UserUsage usage = userUsage.getOrDefault(userId, new UserUsage());
+        UserUsage usage = getUserUsage(userId);
+
+        if (!usage.lastRequestDate.equals(LocalDate.now())) {
+            usage.dailyCount = 0;
+            usage.lastRequestDate = LocalDate.now();
+            userUsage.put(userId, usage);
+            log.debug("New day for user {}, counter reset to 0", userId);
+        }
 
         if (usage.dailyCount >= DAILY_FREE_LIMIT) {
-            log.info("User {} exceeded daily AI limit", userId);
+            log.info("User {} exceeded daily AI limit: {}/{}",
+                    userId, usage.dailyCount, DAILY_FREE_LIMIT);
             return false;
         }
 
-        log.info("User {} can make AI request: {}/{}",
+        log.debug("User {} can make AI request: {}/{}",
                 userId, usage.dailyCount, DAILY_FREE_LIMIT);
         return true;
     }
@@ -38,30 +61,57 @@ public class RateLimitService {
      * Регистрирует AI запрос пользователя
      */
     public void registerAiRequest(Long userId) {
-        UserUsage usage = userUsage.computeIfAbsent(userId, k -> new UserUsage());
+        UserUsage usage = getUserUsage(userId);
+
+        if (!usage.lastRequestDate.equals(LocalDate.now())) {
+            usage.dailyCount = 0;
+            usage.lastRequestDate = LocalDate.now();
+        }
 
         if (usage.dailyCount < DAILY_FREE_LIMIT) {
             usage.dailyCount++;
             userUsage.put(userId, usage);
-            log.info("AI request registered for user {}: {}/{}",
+            log.info("✅ AI request registered for user {}: {}/{}",
                     userId, usage.dailyCount, DAILY_FREE_LIMIT);
         } else {
-            log.warn("Attempt to register AI request for user {} beyond limit", userId);
+            log.warn("⚠️ Attempt to register AI request for user {} beyond limit: {}/{}",
+                    userId, usage.dailyCount, DAILY_FREE_LIMIT);
         }
+    }
+
+    /**
+     * Получает или создает UserUsage для пользователя
+     * ГАРАНТИРУЕТ, что объект добавляется в мапу
+     */
+    private UserUsage getUserUsage(Long userId) {
+        return userUsage.computeIfAbsent(userId,
+                key -> {
+                    log.debug("Creating new UserUsage for user {}", key);
+                    return new UserUsage();
+                });
     }
 
     /**
      * Получает информацию о лимитах пользователя
      */
     public String getUsageInfo(Long userId) {
-        UserUsage usage = userUsage.getOrDefault(userId, new UserUsage());
+        UserUsage usage = getUserUsage(userId);
+
+
+        if (!usage.lastRequestDate.equals(LocalDate.now())) {
+            usage.dailyCount = 0;
+            usage.lastRequestDate = LocalDate.now();
+            userUsage.put(userId, usage);
+            log.debug("New day for user {}, counter reset to 0", userId);
+        }
+
         int remaining = DAILY_FREE_LIMIT - usage.dailyCount;
 
         return """
-                🤖 Ваши лимиты использования AI:
+                🤖 *Ваши лимиты использования AI:*
                             
-                • Использовано сегодня: %d из 5 запросов
-                • Осталось сегодня: %d запросов
+                • **Использовано сегодня:** %d из 5 запросов
+                • **Осталось сегодня:** %d запросов
                             
                 💡 Лимиты сбрасываются каждый день в 00:00
                 """.formatted(usage.dailyCount, remaining);
@@ -71,7 +121,15 @@ public class RateLimitService {
      * Получает количество оставшихся AI запросов
      */
     public int getRemainingAiRequests(Long userId) {
-        UserUsage usage = userUsage.getOrDefault(userId, new UserUsage());
+        UserUsage usage = getUserUsage(userId);
+
+        if (!usage.lastRequestDate.equals(LocalDate.now())) {
+            usage.dailyCount = 0;
+            usage.lastRequestDate = LocalDate.now();
+            userUsage.put(userId, usage);
+            log.debug("New day for user {}, counter reset to 0", userId);
+        }
+
         return DAILY_FREE_LIMIT - usage.dailyCount;
     }
 
@@ -79,7 +137,16 @@ public class RateLimitService {
      * Получает количество использованных AI запросов
      */
     public int getUsedAiRequests(Long userId) {
-        UserUsage usage = userUsage.getOrDefault(userId, new UserUsage());
+        UserUsage usage = getUserUsage(userId);
+
+        if (!usage.lastRequestDate.equals(LocalDate.now())) {
+            usage.dailyCount = 0;
+            usage.lastRequestDate = LocalDate.now();
+            userUsage.put(userId, usage);
+            log.debug("New day for user {}, counter reset to 0", userId);
+            return 0;
+        }
+
         return usage.dailyCount;
     }
 
@@ -87,10 +154,17 @@ public class RateLimitService {
      * Сбрасывает счетчики использования в полночь
      */
     @Scheduled(cron = "0 0 0 * * ?")
-    public void resetDailyCounters() {
+    public synchronized void resetDailyCounters() {
         int userCount = userUsage.size();
-        userUsage.clear();
-        log.info("Daily AI usage counters reset for {} users", userCount);
+        log.info("🔄 Starting daily reset for {} users", userCount);
+
+        userUsage.forEach((userId, usage) -> {
+            usage.dailyCount = 0;
+            usage.lastRequestDate = LocalDate.now();
+            log.debug("Reset counter for user {} to 0", userId);
+        });
+
+        log.info("✅ Daily AI usage counters reset for {} users", userCount);
     }
 
     /**
@@ -116,26 +190,53 @@ public class RateLimitService {
     }
 
     /**
+     * Сбрасывает лимиты для конкретного пользователя
+     */
+    public void resetUserLimits(Long userId) {
+        userUsage.remove(userId);
+        log.info("Лимиты сброшены для пользователя {}", userId);
+    }
+
+    /**
+     * Отладочный метод для проверки состояния
+     */
+    public void debugPrintState(Long userId) {
+        UserUsage usage = userUsage.get(userId);
+        if (usage == null) {
+            log.info("DEBUG: User {} not found in userUsage map", userId);
+        } else {
+            log.info("DEBUG: User {} - count: {}, lastDate: {}, mapSize: {}",
+                    userId, usage.dailyCount, usage.lastRequestDate, userUsage.size());
+        }
+    }
+
+
+    /**
+     * Получает топ пользователей по использованию
+     */
+    public List<Map<String, Object>> getTopUsersByUsage(int limit) {
+        return userUsage.entrySet().stream()
+                .sorted((e1, e2) -> Integer.compare(e2.getValue().dailyCount, e1.getValue().dailyCount))
+                .limit(limit)
+                .map(entry -> {
+                    Map<String, Object> info = new HashMap<>();
+                    info.put("userId", entry.getKey());
+                    info.put("dailyCount", entry.getValue().dailyCount);
+                    return info;
+                })
+                .collect(Collectors.toList());
+    }
+
+    /**
      * Внутренний класс для хранения данных использования пользователя
      */
     private static class UserUsage {
         private int dailyCount = 0;
         private LocalDate lastRequestDate = LocalDate.now();
 
-        public int getDailyCount() {
-            if (!lastRequestDate.equals(LocalDate.now())) {
-                dailyCount = 0;
-                lastRequestDate = LocalDate.now();
-            }
-            return dailyCount;
-        }
-
-        public void increment() {
-            if (!lastRequestDate.equals(LocalDate.now())) {
-                dailyCount = 0;
-                lastRequestDate = LocalDate.now();
-            }
-            dailyCount++;
+        @Override
+        public String toString() {
+            return String.format("UserUsage{count=%d, date=%s}", dailyCount, lastRequestDate);
         }
     }
 }

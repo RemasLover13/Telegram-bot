@@ -43,6 +43,10 @@ public class UserService {
         return user.orElse(null);
     }
 
+    public Optional<User> getUserById(long chatId) {
+        return userRepository.findById(chatId);
+    }
+
     @Transactional
     public boolean deleteUser(Message message) {
         long chatId = message.getChatId();

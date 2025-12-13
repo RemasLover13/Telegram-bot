@@ -123,6 +123,14 @@ public class ConversationContextService {
     }
 
     /**
+     * Очищает весь кэш (для администратора)
+     */
+    public void clearAllCache() {
+        conversationCache.invalidateAll();
+        log.info("🧹 Весь кэш очищен администратором");
+    }
+
+    /**
      * Получает историю как строку (для отладки)
      */
     public String getConversationHistoryAsString(Long userId) {
