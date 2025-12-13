@@ -458,7 +458,8 @@ public class CommandHandler {
                 case "stats":
                     try {
                         String stats = openRouterService.getContextStats();
-                        sendMessage(chatId, TelegramMarkdownEscapeUtil.escapeMarkdownV2(stats));
+                        String escapedStats = TelegramMarkdownEscapeUtil.escapeForTelegram(stats);
+                        sendMessage(chatId, escapedStats);
                     } catch (Exception e) {
                         log.error("Error showing stats for user {}: {}", userId, e.getMessage());
                         sendMessage(chatId, "❌ Ошибка при получении статистики.");
@@ -466,7 +467,7 @@ public class CommandHandler {
                     break;
 
                 case "help":
-                    handleContextCommand(chatId, userId, "/context");
+                    showContextMenu(chatId);
                     break;
 
                 default:

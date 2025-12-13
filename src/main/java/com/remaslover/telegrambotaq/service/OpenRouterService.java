@@ -145,7 +145,7 @@ public class OpenRouterService {
             return parts;
         }
 
-        String safeText = TelegramMarkdownEscapeUtil.escapeMinimal(text);
+        String safeText = TelegramMarkdownEscapeUtil.escapeAllMarkdownChars(text);
 
         int maxLength = 3500;
 
@@ -176,7 +176,6 @@ public class OpenRouterService {
 
         return parts;
     }
-
 
     /**
      * Очищает историю разговора для пользователя
@@ -209,7 +208,7 @@ public class OpenRouterService {
             String roleEmoji = role.equals("user") ? "👤" : "🤖";
             String roleText = role.equals("user") ? "Вы" : "Бот";
 
-            String safeContent = TelegramMarkdownEscapeUtil.escapeMarkdownSmart(content);
+            String safeContent = TelegramMarkdownEscapeUtil.escapeForTelegram(content);
 
             String preview;
             if (safeContent.length() > 100) {
@@ -234,7 +233,7 @@ public class OpenRouterService {
 
         sb.append("_Всего сообщений: ").append(history.size()).append("_");
 
-        return TelegramMarkdownEscapeUtil.escapeMarkdownSmart(sb.toString());
+        return TelegramMarkdownEscapeUtil.escapeForTelegram(sb.toString());
     }
 
     /**
@@ -297,7 +296,7 @@ public class OpenRouterService {
 
             String roleText = role.equals("user") ? "👤 Вы" : "🤖 Бот";
 
-            String cleanContent = TelegramMarkdownEscapeUtil.escapeMinimal(content);
+            String cleanContent = TelegramMarkdownEscapeUtil.cleanAiResponse(content);
 
             String preview;
             if (cleanContent.length() > 80) {
@@ -357,5 +356,4 @@ public class OpenRouterService {
             return "⚠️ Временная ошибка AI сервиса. Попробуйте позже.";
         }
     }
-
 }

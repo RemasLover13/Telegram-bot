@@ -31,11 +31,26 @@ public class MessageSender {
     }
 
     /**
-     * Основной метод отправки сообщений
+     * Надежный метод отправки сообщений
      */
     public void sendMessage(long chatId, String text) {
+        if (trySendWithFullEscape(chatId, text)) {
+            return;
+        }
+
+        if (trySendWithHtml(chatId, text)) {
+            return;
+        }
+
+        sendPlainText(chatId, text);
+    }
+
+    /**
+     * Попытка отправки с полным экранированием
+     */
+    private boolean trySendWithFullEscape(long chatId, String text) {
         try {
-            String safeText = TelegramMarkdownEscapeUtil.escapeForTelegram(text);
+            String safeText = TelegramMarkdownEscapeUtil.escapeAllMarkdownChars(text);
 
             SendMessage message = new SendMessage();
             message.setChatId(String.valueOf(chatId));
@@ -43,13 +58,54 @@ public class MessageSender {
             message.setParseMode("MarkdownV2");
 
             getBot().execute(message);
-            log.debug("✅ Message sent to chat {} ({} chars)", chatId, text.length());
+            log.debug("✅ Message sent with full escape to chat {} ({} chars)",
+                    chatId, text.length());
+            return true;
 
         } catch (Exception e) {
-            log.error("❌ Failed to send message to chat {}: {}", chatId, e.getMessage(), e);
+            log.debug("Full escape failed for chat {}: {}", chatId, e.getMessage());
+            return false;
         }
     }
 
+    /**
+     * Попытка отправки с HTML
+     */
+    private boolean trySendWithHtml(long chatId, String text) {
+        try {
+            String htmlText = convertToSafeHtml(text);
+
+            SendMessage message = new SendMessage();
+            message.setChatId(String.valueOf(chatId));
+            message.setText(htmlText);
+            message.setParseMode("HTML");
+
+            getBot().execute(message);
+            log.debug("✅ Message sent with HTML to chat {} ({} chars)",
+                    chatId, text.length());
+            return true;
+
+        } catch (Exception e) {
+            log.debug("HTML failed for chat {}: {}", chatId, e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Конвертация в безопасный HTML
+     */
+    private String convertToSafeHtml(String text) {
+        if (text == null || text.isEmpty()) {
+            return "";
+        }
+
+        return text
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("'", "&#39;");
+    }
 
     /**
      * Отправляет сообщение как обычный текст
@@ -59,9 +115,7 @@ public class MessageSender {
             String plainText = text
                     .replace("\\", "\\\\")
                     .replace("_", "_")
-                    .replace("*", "*")
-                    .replace("[", "[")
-                    .replace("]", "]");
+                    .replace("*", "*");
 
             SendMessage message = new SendMessage();
             message.setChatId(String.valueOf(chatId));
