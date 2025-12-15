@@ -129,9 +129,6 @@ public class MessageSender {
         }
     }
 
-    /**
-     * Специальный метод для AI-ответов
-     */
     public void sendAiResponse(long chatId, String text) {
         try {
             String safeText = TelegramMarkdownEscapeUtil.escapeSmart(text);
@@ -142,12 +139,19 @@ public class MessageSender {
             message.setParseMode("MarkdownV2");
 
             getBot().execute(message);
-            log.debug("✅ AI response sent to chat {} ({} chars)", chatId, text.length());
 
-        } catch (Exception e) {
-            log.error("❌ Failed to send AI response to chat {}: {}", chatId, e.getMessage(), e);
+        } catch (TelegramApiException e) {
+            log.warn("MarkdownV2 failed, trying plain text...");
 
-            sendPlainTextNoMarkdown(chatId, text);
+            try {
+                SendMessage message = new SendMessage();
+                message.setChatId(String.valueOf(chatId));
+                message.setText(text);
+
+                getBot().execute(message);
+            } catch (Exception e2) {
+                log.error("Complete send failure: {}", e2.getMessage());
+            }
         }
     }
 

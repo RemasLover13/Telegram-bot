@@ -11,7 +11,8 @@ public class TelegramMarkdownEscapeUtil {
     };
 
     /**
-     * АГРЕССИВНАЯ очистка ответов AI - удаляем ВСЁ лишнее экранирование
+     * УЛУЧШЕННАЯ очистка - теперь удаляем ВСЁ экранирование от AI
+     * Включая экранирование массивов \[ и \]
      */
     public static String cleanAiResponse(String text) {
         if (text == null || text.isEmpty()) {
@@ -37,7 +38,10 @@ public class TelegramMarkdownEscapeUtil {
                 .replace("\\|", "|")
                 .replace("\\{", "{")
                 .replace("\\}", "}")
-                .replace("\\~", "~");
+                .replace("\\~", "~")
+                // МАССИВЫ - очень важно!
+                .replace("\\[", "[")
+                .replace("\\]", "]");
 
         cleaned = cleaned.replace("\\\\\\\\", "\\\\");
 
@@ -54,7 +58,9 @@ public class TelegramMarkdownEscapeUtil {
     }
 
     /**
-     * Умное экранирование - экранируем только отдельные спецсимволы
+     * УПРОЩЕННАЯ и НАДЁЖНАЯ версия экранирования
+     * Больше не пытаемся быть умными - просто экранируем ВСЁ,
+     * кроме явных блоков кода и разметки
      */
     public static String escapeSmart(String text) {
         if (text == null || text.isEmpty()) {
@@ -63,20 +69,57 @@ public class TelegramMarkdownEscapeUtil {
 
         String cleaned = cleanAiResponse(text);
 
-        StringBuilder result = new StringBuilder();
-        char[] chars = cleaned.toCharArray();
+        if (containsCodeBlocks(cleaned)) {
+            return escapeWithCodeBlocks(cleaned);
+        }
 
-        for (int i = 0; i < chars.length; i++) {
-            char c = chars[i];
+        return escapeAllMarkdownChars(cleaned);
+    }
+
+    /**
+     * Определяет, есть ли в тексте блоки кода ```
+     */
+    private static boolean containsCodeBlocks(String text) {
+        return text.contains("```");
+    }
+
+    /**
+     * Обработка текста с блоками кода
+     */
+    private static String escapeWithCodeBlocks(String text) {
+        StringBuilder result = new StringBuilder();
+
+        String[] parts = text.split("```");
+
+        for (int i = 0; i < parts.length; i++) {
+            if (i % 2 == 0) {
+                result.append(escapeAllMarkdownChars(parts[i]));
+            } else {
+                result.append("```").append(parts[i]).append("```");
+            }
+        }
+
+        return result.toString();
+    }
+
+    /**
+     * Экранирование ВСЕХ специальных символов
+     * Просто, но надёжно
+     */
+    public static String escapeAllMarkdownChars(String text) {
+        if (text == null || text.isEmpty()) {
+            return "";
+        }
+
+        StringBuilder result = new StringBuilder();
+
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
 
             if (c == '\\') {
                 result.append("\\\\");
             } else if (isMarkdownV2SpecialChar(c)) {
-                if (isValidMarkdownPattern(chars, i)) {
-                    result.append(c);
-                } else {
-                    result.append('\\').append(c);
-                }
+                result.append('\\').append(c);
             } else {
                 result.append(c);
             }
@@ -86,78 +129,26 @@ public class TelegramMarkdownEscapeUtil {
     }
 
     /**
-     * Проверяет, является ли символ частью ВАЛИДНОЙ разметки Telegram
+     * Проверяет, является ли символ специальным
      */
-    private static boolean isValidMarkdownPattern(char[] chars, int pos) {
-        char c = chars[pos];
-
-        if (c == '*') {
-            if (pos > 0 && chars[pos - 1] == '*') return true;
-            if (pos < chars.length - 1 && chars[pos + 1] == '*') return true;
-        }
-
-        if (c == '`') {
-            if (pos > 0 && chars[pos - 1] == '`') return true;
-            if (pos < chars.length - 1 && chars[pos + 1] == '`') return true;
-        }
-
-        if (c == '_') {
-            if (pos > 0 && chars[pos - 1] == '_') return true;
-            if (pos < chars.length - 1 && chars[pos + 1] == '_') return true;
-        }
-
-        if (c == '~') {
-            if (pos > 0 && chars[pos - 1] == '~') return true;
-            if (pos < chars.length - 1 && chars[pos + 1] == '~') return true;
-        }
-
-        if (c == '[') {
-            for (int i = pos + 1; i < chars.length; i++) {
-                if (chars[i] == ']' && i + 1 < chars.length && chars[i + 1] == '(') {
-                    return true;
-                }
-                if (chars[i] == '\n') break;
+    private static boolean isMarkdownV2SpecialChar(char c) {
+        for (char special : MARKDOWN_V2_SPECIAL_CHARS) {
+            if (c == special) {
+                return true;
             }
         }
-
-        if (c == ']' && pos > 0 && chars[pos - 1] != '\\') {
-            for (int i = pos - 1; i >= 0; i--) {
-                if (chars[i] == '[') return true;
-                if (chars[i] == '\n') break;
-            }
-        }
-
-        if (c == '(') {
-            for (int i = pos - 1; i >= 0; i--) {
-                if (chars[i] == ']') return true;
-                if (chars[i] == '\n') break;
-            }
-        }
-
-        if (c == ')') {
-            for (int i = pos - 1; i >= 0; i--) {
-                if (chars[i] == '(') {
-                    for (int j = i - 1; j >= 0; j--) {
-                        if (chars[j] == ']') return true;
-                        if (chars[j] == '\n') break;
-                    }
-                }
-                if (chars[i] == '\n') break;
-            }
-        }
-
         return false;
     }
 
     /**
-     * Простая версия для совместимости
+     * Для совместимости
      */
     public static String escapeForTelegram(String text) {
         return escapeSmart(text);
     }
 
     /**
-     * Фолбэк на случай крайней необходимости
+     * Фолбэк
      */
     public static String escapeMinimal(String text) {
         if (text == null || text.isEmpty()) {
@@ -171,16 +162,8 @@ public class TelegramMarkdownEscapeUtil {
                 .replace("[", "\\[")
                 .replace("]", "\\]")
                 .replace("(", "\\(")
-                .replace(")", "\\)");
-    }
-
-    private static boolean isMarkdownV2SpecialChar(char c) {
-        for (char special : MARKDOWN_V2_SPECIAL_CHARS) {
-            if (c == special) {
-                return true;
-            }
-        }
-        return false;
+                .replace(")", "\\)")
+                .replace("`", "\\`");
     }
 
 }

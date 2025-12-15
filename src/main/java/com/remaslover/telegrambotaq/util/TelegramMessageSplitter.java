@@ -33,23 +33,21 @@ public class TelegramMessageSplitter {
         try {
             String cleanedText = TelegramMarkdownEscapeUtil.cleanAiResponse(text);
 
-            String safeText = TelegramMarkdownEscapeUtil.escapeForTelegram(cleanedText);
+            List<String> rawParts = splitPreservingCodeBlocks(cleanedText);
 
-            if (safeText.length() <= SAFE_MESSAGE_LENGTH) {
-                parts.add(safeText);
-                return parts;
+            for (String part : rawParts) {
+                String escapedPart = TelegramMarkdownEscapeUtil.escapeSmart(part);
+                parts.add(escapedPart);
             }
 
-            parts = splitPreservingCodeBlocks(safeText);
-
             log.info("Split message into {} parts", parts.size());
-
             return parts;
 
         } catch (Exception e) {
             log.error("Error splitting message: {}", e.getMessage(), e);
 
-            return List.of(TelegramMarkdownEscapeUtil.escapeMinimal(text));
+            String safe = TelegramMarkdownEscapeUtil.escapeMinimal(text);
+            return List.of(safe);
         }
     }
 
