@@ -22,37 +22,36 @@ public class TelegramMarkdownEscapeUtil {
         String cleaned = text;
 
         cleaned = cleaned
-                .replace("\\.", ".")
+                .replace("\\*", "*")
+                .replace("\\_", "_")
+                .replace("\\`", "`")
+                .replace("\\[", "[")
+                .replace("\\]", "]")
                 .replace("\\(", "(")
                 .replace("\\)", ")")
-                .replace("\\,", ",")
-                .replace("\\:", ":")
-                .replace("\\;", ";")
-                .replace("\\!", "!")
-                .replace("\\?", "?")
-                .replace("\\'", "'")
-                .replace("\\\"", "\"")
+                .replace("\\~", "~")
+                .replace("\\>", ">")
+                .replace("\\#", "#")
+                .replace("\\+", "+")
                 .replace("\\-", "-")
                 .replace("\\=", "=")
-                .replace("\\+", "+")
                 .replace("\\|", "|")
                 .replace("\\{", "{")
                 .replace("\\}", "}")
-                .replace("\\~", "~")
-                // МАССИВЫ - очень важно!
-                .replace("\\[", "[")
-                .replace("\\]", "]");
-
-        cleaned = cleaned.replace("\\\\\\\\", "\\\\");
+                .replace("\\.", ".")
+                .replace("\\!", "!")
+                .replace("\\,", ",")
+                .replace("\\:", ":")
+                .replace("\\;", ";");
 
         cleaned = cleaned
-                .replace("\\\\*\\\\*", "**")
-                .replace("\\\\`\\\\`\\\\`", "```")
-                .replace("\\\\_\\\\_", "__")
-                .replace("\\\\~\\\\~", "~~")
-                .replace("\\\\`", "`")
                 .replace("\\\\*", "*")
-                .replace("\\\\_", "_");
+                .replace("\\\\_", "_")
+                .replace("\\\\`", "`")
+                .replace("\\\\[", "[")
+                .replace("\\\\]", "]");
+
+        cleaned = cleaned.replace("\\\\\\\\", "\\\\");
 
         return cleaned;
     }

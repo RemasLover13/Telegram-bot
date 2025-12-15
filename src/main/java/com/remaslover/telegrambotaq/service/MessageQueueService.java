@@ -1,5 +1,6 @@
 package com.remaslover.telegrambotaq.service;
 
+import com.remaslover.telegrambotaq.util.TelegramMarkdownEscapeUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -70,21 +71,26 @@ public class MessageQueueService {
                         Thread.sleep(task.delayMs);
                     }
 
-                    if (task.isAiResponse) {
-                        messageSender.sendAiResponse(task.chatId, task.text);
-                    } else {
-                        messageSender.sendMessage(task.chatId, task.text);
-                    }
+                    try {
+                        if (task.isAiResponse) {
+                            String cleaned = TelegramMarkdownEscapeUtil.cleanAiResponse(task.text);
+                            messageSender.sendMessage(task.chatId, cleaned);
+                        } else {
+                            messageSender.sendMessage(task.chatId, task.text);
+                        }
 
-                    log.debug("Sent queued message to chat {} (delay: {}ms, isAiResponse: {})",
-                            task.chatId, task.delayMs, task.isAiResponse);
+                        log.debug("Sent queued message to chat {} (delay: {}ms)",
+                                task.chatId, task.delayMs);
+
+                    } catch (Exception e) {
+                        log.warn("Failed to send queued message to chat {}: {}",
+                                task.chatId, e.getMessage());
+                    }
 
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     log.warn("Message queue processor interrupted");
                     break;
-                } catch (Exception e) {
-                    log.error("Error processing queued message: {}", e.getMessage(), e);
                 }
             }
         }, "message-queue-processor").start();
