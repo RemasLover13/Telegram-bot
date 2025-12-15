@@ -6,24 +6,9 @@ import org.springframework.stereotype.Component;
 public class TelegramMarkdownEscapeUtil {
 
 
-    private static final char[] MARKDOWN_V2_SPECIAL_CHARS = {
-            '_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'
-    };
-
-    /**
-     * Полное экранирование для Telegram MarkdownV2
-     * Экранирует ВСЕ специальные символы
-     */
-    public static String escapeForTelegram(String text) {
-        if (text == null || text.isEmpty()) {
-            return "";
-        }
-
-        return escapeAllMarkdownChars(text);
-    }
-
     /**
      * Упрощенная версия для гарантированной работы
+     * ПРАВИЛЬНОЕ экранирование для Telegram MarkdownV2
      */
     public static String escapeAllMarkdownChars(String text) {
         if (text == null || text.isEmpty()) {
@@ -32,6 +17,7 @@ public class TelegramMarkdownEscapeUtil {
 
         return text
                 .replace("\\", "\\\\")
+
                 .replace("_", "\\_")
                 .replace("*", "\\*")
                 .replace("[", "\\[")
@@ -52,56 +38,54 @@ public class TelegramMarkdownEscapeUtil {
                 .replace("!", "\\!");
     }
 
-
     /**
-     * Проверяет, является ли символ специальным для MarkdownV2
+     * Умное экранирование (лучше читается)
+     * Экранирует только то, что нужно
      */
-    private static boolean isMarkdownV2SpecialChar(char c) {
-        for (char special : MARKDOWN_V2_SPECIAL_CHARS) {
-            if (c == special) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Считает количество последовательных обратных слешей
-     */
-    private static int countConsecutiveBackslashes(String text, int position) {
-        int count = 0;
-        while (position >= 0 && text.charAt(position) == '\\') {
-            count++;
-            position--;
-        }
-        return count;
-    }
-
-    /**
-     * Очистка AI-ответов от лишнего экранирования
-     */
-    public static String cleanAiResponse(String text) {
+    public static String escapeSmart(String text) {
         if (text == null || text.isEmpty()) {
             return "";
         }
 
-        String cleaned = text
-                .replace("\\\\", "\\")
-                .replace("\\!", "!")
-                .replace("\\.", ".")
-                .replace("\\,", ",")
-                .replace("\\:", ":")
-                .replace("\\;", ";")
-                .replace("\\-", "-")
-                .replace("\\'", "'")
-                .replace("\\\"", "\"");
+        StringBuilder result = new StringBuilder(text.length() + 50);
 
-        return cleaned;
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+
+            switch (c) {
+                case '\\':
+                    result.append("\\\\");
+                    break;
+                case '_':
+                case '*':
+                case '[':
+                case ']':
+                case '(':
+                case ')':
+                case '~':
+                case '`':
+                case '>':
+                case '#':
+                case '+':
+                case '-':
+                case '=':
+                case '|':
+                case '{':
+                case '}':
+                case '.':
+                case '!':
+                    result.append('\\').append(c);
+                    break;
+                default:
+                    result.append(c);
+            }
+        }
+
+        return result.toString();
     }
 
-
     /**
-     * Минимальное экранирование только самых проблемных символов
+     * Минимальное экранирование (самые проблемные символы)
      */
     public static String escapeMinimal(String text) {
         if (text == null || text.isEmpty()) {
@@ -116,29 +100,39 @@ public class TelegramMarkdownEscapeUtil {
                 .replace("]", "\\]")
                 .replace("(", "\\(")
                 .replace(")", "\\)")
-                .replace("~", "\\~")
                 .replace("`", "\\`")
-                .replace(">", "\\>")
                 .replace("#", "\\#");
     }
 
     /**
-     * Умное экранирование MarkdownV2 (сохраняет форматирование)
+     * Очистка AI-ответов от лишнего экранирования
+     * УБИРАЕМ лишние экранирования, которые мог добавить AI
      */
-    public static String escapeMarkdownSmart(String text) {
+    public static String cleanAiResponse(String text) {
         if (text == null || text.isEmpty()) {
             return "";
         }
 
-        return escapeForTelegram(text);
+        return text
+                .replace("\\\\\\\\", "\\\\")
+
+                .replace("\\!", "!")
+                .replace("\\.", ".")
+                .replace("\\,", ",")
+                .replace("\\:", ":")
+                .replace("\\;", ";")
+                .replace("\\-", "-")
+                .replace("\\'", "'")
+                .replace("\\\"", "\"")
+                .replace("\\?", "?");
     }
 
     /**
-     * Экранирование для MarkdownV2 (аналогично escapeForTelegram)
+     * Полное экранирование для Telegram MarkdownV2
+     * (для совместимости, вызывает escapeAllMarkdownChars)
      */
-    public static String escapeMarkdownV2(String text) {
+    public static String escapeForTelegram(String text) {
         return escapeAllMarkdownChars(text);
     }
-
 
 }

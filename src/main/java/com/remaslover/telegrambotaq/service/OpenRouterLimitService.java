@@ -57,16 +57,16 @@ public class OpenRouterLimitService {
 
                 StringBuilder sb = new StringBuilder();
                 sb.append("📊 *Информация об использовании OpenRouter:*\n\n");
-                sb.append("• **Тип аккаунта:** ").append(isFreeTier ? "Бесплатный 🆓" : "Платный 💰").append("\n");
-                sb.append("• **Лейбл:** ").append(label).append("\n");
+                sb.append("• Тип аккаунта: ").append(isFreeTier ? "Бесплатный 🆓" : "Платный 💰").append("\n");
+                sb.append("• Лейбл: ").append(label).append("\n");
 
                 if (limit > 0) {
                     double remaining = limit - used;
                     double percentage = (used / limit) * 100;
-                    sb.append("• **Использовано:** $").append(String.format("%.4f", used)).append("\n");
-                    sb.append("• **Лимит:** $").append(String.format("%.4f", limit)).append("\n");
-                    sb.append("• **Осталось:** $").append(String.format("%.4f", remaining)).append("\n");
-                    sb.append("• **Заполнено:** ").append(String.format("%.1f", percentage)).append("%\n");
+                    sb.append("• Использовано: $").append(String.format("%.4f", used)).append("\n");
+                    sb.append("• Лимит: $").append(String.format("%.4f", limit)).append("\n");
+                    sb.append("• Осталось: $").append(String.format("%.4f", remaining)).append("\n");
+                    sb.append("• Заполнено: ").append(String.format("%.1f", percentage)).append("%\n");
                 } else {
                     sb.append("• **Использовано:** $").append(String.format("%.4f", used)).append("\n");
                     sb.append("• **Лимит:** не установлен\n");

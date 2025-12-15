@@ -99,13 +99,13 @@ public class UserService {
 
     public String formatUserData(User user) {
         return """
-                👤 *Ваши данные:*
+                👤 Ваши данные:
                             
-                • **ID:** %d
-                • **Имя:** %s
-                • **Фамилия:** %s
-                • **Username:** @%s
-                • **Зарегистрирован:** %s
+                • ID: %d
+                • Имя: %s
+                • Фамилия: %s
+                • Username: @%s
+                • Зарегистрирован: %s
                 """.formatted(
                 user.getId(),
                 user.getFirstName() != null ? user.getFirstName() : "Не указано",
