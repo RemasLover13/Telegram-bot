@@ -130,7 +130,7 @@ public class OpenRouterService {
         } catch (Exception e) {
             log.error("Error splitting message for Telegram: {}", e.getMessage(), e);
 
-            String safeText = TelegramMarkdownEscapeUtil.escapeAllMarkdownChars(text);
+            String safeText = TelegramMarkdownEscapeUtil.escapeSmart(text);
             return List.of(safeText);
         }
     }
@@ -145,7 +145,7 @@ public class OpenRouterService {
             return parts;
         }
 
-        String safeText = TelegramMarkdownEscapeUtil.escapeAllMarkdownChars(text);
+        String safeText = TelegramMarkdownEscapeUtil.escapeSmart(text);
 
         int maxLength = 3500;
 
@@ -331,14 +331,26 @@ public class OpenRouterService {
 
     private String getSystemPrompt() {
         return """
-                Ты полезный ассистент в Telegram боте. 
-                Отвечай на русском языке кратко и понятно.
-                Будь дружелюбным и помогай пользователям.
-                Если вопрос неясен или требует уточнения - вежливо попроси уточнить.
-                Форматируй ответы для лучшей читаемости.
-                Максимальная длина ответа: 500 символов.
-                Помни контекст разговора и учитывай предыдущие сообщения.
-                """;
+           Ты полезный ассистент в Telegram боте.
+           ОТВЕЧАЙ НА ТОМ ЯЗЫКЕ, НА КОТОРОМ ТЕБЕ ЗАДАЛИ ВОПРОС.
+           
+           СТРОГО соблюдай эти правила форматирования для Telegram:
+           1. Весь код оборачивай в тройные бэктики с указанием языка:
+              ```java
+              // твой код здесь
+              ```
+           2. Для списков используй дефисы или звездочки:
+              - Пункт 1
+              - Пункт 2
+           3. Важные термины выделяй жирным: **важный термин**
+           4. Команды и inline код выделяй одинарными бэктиками: `команда`
+           5. Разбивай длинные ответы на параграфы.
+           
+           Будь дружелюбным и помогай пользователям.
+           Если вопрос неясен или требует уточнения - вежливо попроси уточнить.
+           Максимальная длина ответа: 2000 символов.
+           Помни контекст разговора и учитывай предыдущие сообщения.
+           """;
     }
 
     private String handleOpenRouterError(Exception e) {

@@ -50,7 +50,7 @@ public class MessageSender {
      */
     private boolean trySendWithFullEscape(long chatId, String text) {
         try {
-            String safeText = TelegramMarkdownEscapeUtil.escapeAllMarkdownChars(text);
+            String safeText = TelegramMarkdownEscapeUtil.escapeForTelegram(text);
 
             SendMessage message = new SendMessage();
             message.setChatId(String.valueOf(chatId));
@@ -134,16 +134,7 @@ public class MessageSender {
      */
     public void sendAiResponse(long chatId, String text) {
         try {
-            String cleanedText = TelegramMarkdownEscapeUtil.cleanAiResponse(text);
-            String safeText = TelegramMarkdownEscapeUtil.escapeAllMarkdownChars(cleanedText);
-
-            char[] specialChars = {'_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'};
-            for (char c : specialChars) {
-                if (safeText.contains(String.valueOf(c)) &&
-                    !safeText.contains("\\" + c)) {
-                    log.warn("⚠️ Unescaped special char '{}' in text for chat {}", c, chatId);
-                }
-            }
+            String safeText = TelegramMarkdownEscapeUtil.escapeSmart(text);
 
             SendMessage message = new SendMessage();
             message.setChatId(String.valueOf(chatId));

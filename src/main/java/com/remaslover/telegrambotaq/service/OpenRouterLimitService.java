@@ -68,8 +68,8 @@ public class OpenRouterLimitService {
                     sb.append("• Осталось: $").append(String.format("%.4f", remaining)).append("\n");
                     sb.append("• Заполнено: ").append(String.format("%.1f", percentage)).append("%\n");
                 } else {
-                    sb.append("• **Использовано:** $").append(String.format("%.4f", used)).append("\n");
-                    sb.append("• **Лимит:** не установлен\n");
+                    sb.append("• Использовано: $").append(String.format("%.4f", used)).append("\n");
+                    sb.append("• Лимит: не установлен\n");
                 }
 
                 return sb.toString();
