@@ -24,7 +24,7 @@ public class OpenRouterConfig {
     @Value("${OPENROUTER_BASE_URL:https://openrouter.ai/api/v1}")
     private String baseUrl;
 
-    @Value("${OPENROUTER_MODEL:google/gemini-2.5-flash}")
+    @Value("${OPENROUTER_MODEL:amazon/nova-2-lite-v1}")
     private String model;
 
     @Bean

@@ -24,7 +24,7 @@ public class OpenRouterService {
     @Value("${OPENROUTER_API_KEY:}")
     private String apiKey;
 
-    @Value("${OPENROUTER_MODEL:google/gemini-2.5-flash}")
+    @Value("${OPENROUTER_MODEL:amazon/nova-2-lite-v1}")
     private String model;
 
     private final RestTemplate restTemplate;
