@@ -66,7 +66,7 @@ public class OpenRouterService {
             Map<String, Object> requestBody = new HashMap<>();
             requestBody.put("model", model);
             requestBody.put("messages", conversationHistory);
-            requestBody.put("max_tokens", 2000);
+            requestBody.put("max_tokens", 500);
             requestBody.put("temperature", 0.7);
 
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
@@ -347,7 +347,7 @@ public class OpenRouterService {
                                     
                 Будь дружелюбным и помогай пользователям.
                 Если вопрос неясен или требует уточнения - вежливо попроси уточнить.
-                Максимальная длина ответа: 1500 символов.
+                Максимальная длина ответа: 500 символов.
                 Помни контекст разговора и учитывай предыдущие сообщения.
                 """;
     }
