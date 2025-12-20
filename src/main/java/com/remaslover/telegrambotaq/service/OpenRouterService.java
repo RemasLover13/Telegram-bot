@@ -24,7 +24,7 @@ public class OpenRouterService {
     @Value("${OPENROUTER_API_KEY:}")
     private String apiKey;
 
-    @Value("${OPENROUTER_MODEL:amazon/nova-2-lite-v1}")
+    @Value("${OPENROUTER_MODEL:xiaomi/mimo-v2-flash:free}")
     private String model;
 
     private final RestTemplate restTemplate;
