@@ -18,7 +18,7 @@ public class RateLimitService {
     private static final Logger log = LoggerFactory.getLogger(RateLimitService.class);
 
     private final Map<Long, UserUsage> userUsage = new ConcurrentHashMap<>();
-    private static final int DAILY_FREE_LIMIT = 5;
+    private static final int DAILY_FREE_LIMIT = 10;
 
     /**
      * Отладочный метод - показывает все записи
@@ -110,7 +110,7 @@ public class RateLimitService {
         return """
                 🤖 *Ваши лимиты использования AI:*
                             
-                • **Использовано сегодня:** %d из 5 запросов
+                • **Использовано сегодня:** %d из 10 запросов
                 • **Осталось сегодня:** %d запросов
                             
                 💡 Лимиты сбрасываются каждый день в 00:00

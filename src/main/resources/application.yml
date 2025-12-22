@@ -27,7 +27,7 @@ spring:
         options:
           model: ${OPENROUTER_MODEL:xiaomi/mimo-v2-flash:free}
           temperature: 0.7
-          max-tokens: 500
+          max-tokens: 1500
 
 bot:
   name: ${BOT_NAME}
@@ -38,7 +38,7 @@ app:
   openrouter:
     site-url: ${BOT_SITE_URL:https://t.me/OfficialAnswerToQuestionBot}
     app-name: ${BOT_APP_NAME:OfficialAnswerToQuestionBot}
-    daily-limit: ${DAILY_LIMIT:5}
+    daily-limit: ${DAILY_LIMIT:10}
 
 news:
   api:

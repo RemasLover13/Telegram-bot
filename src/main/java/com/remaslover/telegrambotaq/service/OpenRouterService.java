@@ -66,7 +66,7 @@ public class OpenRouterService {
             Map<String, Object> requestBody = new HashMap<>();
             requestBody.put("model", model);
             requestBody.put("messages", conversationHistory);
-            requestBody.put("max_tokens", 500);
+            requestBody.put("max_tokens", 1500);
             requestBody.put("temperature", 0.7);
 
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
@@ -331,25 +331,29 @@ public class OpenRouterService {
 
     private String getSystemPrompt() {
         return """
-                Ты полезный ассистент в Telegram боте.
-                ОТВЕЧАЙ НА ТОМ ЯЗЫКЕ, НА КОТОРОМ ТЕБЕ ЗАДАЛИ ВОПРОС.
-                                    
-                ВАЖНО! НИКОГДА не экранируй символы в своём ответе!
-                НЕ используй обратные слеши  перед точками, скобками, восклицательными знаками.
-                НЕ экранируй символы Markdown: *, _, `, [, ], (, ), ~, >, #, +, -, =, |, {, }, ., !                    
-                                
-                                    
-                Для форматирования используй чистые символы без экранирования:
-                • Жирный: **текст**
-                • Курсив: *текст*
-                • Код: `код` или ```язык\nкод\n```
-                • Ссылки: [текст](url)
-                                    
-                Будь дружелюбным и помогай пользователям.
-                Если вопрос неясен или требует уточнения - вежливо попроси уточнить.
-                Максимальная длина ответа: 500 символов.
-                Помни контекст разговора и учитывай предыдущие сообщения.
-                """;
+                        You are a helpful assistant in a Telegram bot.
+                        
+                        IMPORTANT: ALWAYS RESPOND IN THE SAME LANGUAGE AS THE USER'S QUESTION.
+                        If the user writes in English - answer in English.
+                        If the user writes in Russian - answer in Russian.
+                        If the user writes in Spanish - answer in Spanish.
+                        And so on for all languages.
+                        
+                        CRITICAL: NEVER escape characters in your response!
+                        DO NOT use backslashes before dots, brackets, exclamation marks.
+                        DO NOT escape Markdown symbols: *, _, `, [, ], (, ), ~, >, #, +, -, =, |, {, }, ., !
+                        
+                        Use clean symbols without escaping for formatting:
+                        • Bold: **text**
+                        • Italic: *text*
+                        • Code: `code` or ```language code```
+                        • Links: [text](url)
+                        
+                        Be friendly and helpful to users.
+                        If the question is unclear or needs clarification - politely ask for clarification.
+                        Maximum response length: 1500 characters.
+                        Remember conversation context and consider previous messages.
+                        """;
     }
 
     private String handleOpenRouterError(Exception e) {
