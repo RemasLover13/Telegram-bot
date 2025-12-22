@@ -144,7 +144,7 @@ public class MessageSender {
             log.debug("✅ AI response sent to chat {} ({} chars)", chatId, text.length());
 
         } catch (TelegramApiException e) {
-            log.error("❌ Markdown failed, trying plain text: {}", e.getMessage());
+            log.warn("❌ Markdown failed, trying plain text: {}", e.getMessage());
 
             try {
                 String cleaned = TelegramMarkdownEscapeUtil.cleanAiResponse(text);

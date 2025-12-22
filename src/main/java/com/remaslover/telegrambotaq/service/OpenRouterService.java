@@ -31,9 +31,11 @@ public class OpenRouterService {
     private final ObjectMapper objectMapper;
     private final ConversationContextService conversationContextService;
     private final TelegramMessageSplitter telegramMessageSplitter;
+    private final LanguageDetector languageDetector;
 
-    public OpenRouterService(ConversationContextService conversationContextService, TelegramMessageSplitter telegramMessageSplitter) {
+    public OpenRouterService(ConversationContextService conversationContextService, TelegramMessageSplitter telegramMessageSplitter, LanguageDetector languageDetector) {
         this.telegramMessageSplitter = telegramMessageSplitter;
+        this.languageDetector = languageDetector;
         this.restTemplate = new RestTemplate();
         this.objectMapper = new ObjectMapper();
         this.conversationContextService = conversationContextService;
@@ -46,6 +48,12 @@ public class OpenRouterService {
     public List<String> generateResponseAsParts(Long userId, String userMessage) {
         try {
             log.info("Sending request to OpenRouter for user {}: {}", userId, userMessage);
+
+            String detectedLanguage = languageDetector.detectLanguage(userMessage);
+            String languageName = languageDetector.getLanguageName(detectedLanguage);
+
+            log.info("Detected language for user {}: {} ({})",
+                    userId, languageName, detectedLanguage);
 
             if (apiKey == null || apiKey.isEmpty()) {
                 log.error("OpenRouter API key is not configured");
