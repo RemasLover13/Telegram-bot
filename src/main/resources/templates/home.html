@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🤖 Telegram AI Bot</title>
+
+    <link rel="icon" th:href="@{/assets/images/favicon.ico}" type="image/x-icon">
+    <link rel="shortcut icon" th:href="@{/assets/images/favicon.ico}" type="image/x-icon">
+
+    <meta name="description" content="Telegram AI Assistant - умный бот с поддержкой контекста">
+    <meta name="keywords" content="telegram, bot, ai, spring boot, openrouter">
+
+    <meta property="og:title" content="Telegram AI Assistant">
+    <meta property="og:description" content="Умный бот с поддержкой контекста и многократного диалога">
+    <meta property="og:image" th:content="@{/assets/images/logo.png}">
+    <meta property="og:image:width" content="640">
+    <meta property="og:image:height" content="640">
+    <meta property="og:url" content="https://ваш-домен.com/">
+    <meta property="og:type" content="website">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Telegram AI Assistant">
+    <meta name="twitter:description" content="Умный бот с поддержкой контекста">
+    <meta name="twitter:image" th:content="@{/assets/images/logo.png}">
+
+    <link rel="stylesheet" th:href="@{/css/styles.css}">
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <div class="logo-container">
+            <img th:src="@{/assets/images/logo.png}"
+                 alt="AI Bot Logo"
+                 class="logo"
+                 width="120"
+                 height="120">
+            <div class="logo-text">
+                <h1>🤖 Telegram AI Assistant</h1>
+                <p class="subtitle">Умный бот с поддержкой контекста и многократного диалога</p>
+            </div>
+        </div>
+
+        <div class="status-badge">Status: <strong>RUNNING</strong></div>
+        <p class="server-time">Server Time: <span th:text="${serverTime}">2024-01-01T12:00:00</span></p>
+    </div>
+
+    <div class="media-container">
+        <div class="video-wrapper">
+            <h3>🎥 Демонстрация работы бота</h3>
+            <iframe
+                    th:src="'https://www.youtube.com/embed/' + ${videoId} + '?controls=1&rel=0&modestbranding=1'"
+                    title="YouTube video player"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowfullscreen>
+            </iframe>
+            <p><small>Обзор функционала Telegram AI бота</small></p>
+
+            <img th:src="@{/assets/images/bot-preview.jpg}"
+                 alt="Bot Interface Preview"
+                 class="preview-image">
+        </div>
+
+        <div class="audio-wrapper">
+            <h3>🎵 Музыкальный плеер</h3>
+            <p>Выберите трек для прослушивания</p>
+
+            <audio id="mainAudioPlayer" controls class="audio-player">
+                Ваш браузер не поддерживает аудио элемент.
+            </audio>
+
+            <div class="controls">
+                <button class="control-btn" onclick="playTrack('background-music')">▶️ Play</button>
+                <button class="control-btn" onclick="document.getElementById('mainAudioPlayer').pause()">⏸️ Pause</button>
+                <button class="control-btn" onclick="changeVolume(-0.1)">🔉 -</button>
+                <button class="control-btn" onclick="changeVolume(0.1)">🔊 +</button>
+                <button class="control-btn" onclick="nextTrack()">⏭️ Next</button>
+            </div>
+
+            <div class="playlist">
+                <div class="track-item active" onclick="playTrack('background-music')">
+                    <span class="track-number">1</span>
+                    <span class="track-emoji">🎵</span>
+                    Расслабляющий саундтрек (2:30)
+                </div>
+                <div class="track-item" onclick="playTrack('track1')">
+                    <span class="track-number">2</span>
+                    <span class="track-emoji">⚡</span>
+                    Энергичная фоновая музыка (3:15)
+                </div>
+                <div class="track-item" onclick="playTrack('track2')">
+                    <span class="track-number">3</span>
+                    <span class="track-emoji">🚀</span>
+                    Космическая атмосфера (4:20)
+                </div>
+
+                <div class="track-item" onclick="playTrack('track3')">
+                    <span class="track-number">3</span>
+                    <span class="track-emoji">🚀</span>
+                    Сгенерирована ИИ (5:00)
+                </div>
+            </div>
+
+            <p><small>Формат: MP3 | Автопереключение треков</small></p>
+        </div>
+    </div>
+
+    <div class="features">
+        <div class="feature">
+            <div class="feature-icon">🌍</div>
+            <h4>🚀 Основные функции</h4>
+            <p>• Поддержка 50+ языков<br>• Контекст диалога<br>• Markdown форматирование<br>• Многопользовательский режим</p>
+        </div>
+        <div class="feature">
+            <div class="feature-icon">📊</div>
+            <h4>📊 Статистика</h4>
+            <p>• Аптайм: 99.9%<br>• Ответ за &lt;2 секунды<br>• 10 бесплатных запросов<br>• 24/7 доступность</p>
+        </div>
+        <div class="feature">
+            <div class="feature-icon">⚙️</div>
+            <h4>🔧 API & Интеграции</h4>
+            <p>• <a th:href="@{/ping}">/ping</a> - проверка работы<br>• <a th:href="@{/health}">/health</a> - детальный статус<br>• OpenRouter AI<br>• Spring Boot</p>
+        </div>
+    </div>
+
+    <footer>
+        <div class="footer-logo">
+            <img th:src="@{/assets/images/logo.png}"
+                 alt="Logo"
+                 width="50"
+                 height="50"
+                 style="border-radius: 10px; margin-right: 10px;">
+            <span>© 2024 AI Telegram Bot | Powered by Spring Boot & OpenRouter AI</span>
+        </div>
+        <p style="margin-top: 10px; font-size: 0.8em;">
+            Видео: YouTube | Музыка: Royalty Free Tracks | Logo: Custom Design
+        </p>
+    </footer>
+</div>
+
+<script th:src="@{/js/player.js}"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        playTrack('background-music');
+    });
+</script>
+</body>
+</html>

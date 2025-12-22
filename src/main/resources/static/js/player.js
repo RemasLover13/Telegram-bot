@@ -14,6 +14,11 @@ const tracks = {
         src: '/assets/music/track2.mp3',
         title: 'Космическая атмосфера',
         duration: '4:20'
+    },
+    'track3': {
+        src: '/assets/music/track3.mp3',
+        title: 'Песня для души',
+        duration: '5:00'
     }
 };
 
