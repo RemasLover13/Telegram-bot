@@ -34,9 +34,5 @@ public class WebConfig implements WebMvcConfigurer {
         registry.addViewController("/index").setViewName("home");
         registry.addViewController("/home").setViewName("home");
     }
-
-    @Override
-    public void configureDefaultServletHandling(DefaultServletHandlerConfigurer configurer) {
-        configurer.enable();
-    }
+    
 }
