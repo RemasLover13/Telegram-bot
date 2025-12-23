@@ -6,22 +6,11 @@ server:
 spring:
   config:
     import: optional:file:.env[.properties]
-  thymeleaf:
-    prefix: classpath:/templates/
-    suffix: html
-    mode: HTML
-    encoding: UTF-8
-    cache: false
   web:
     resources:
       static-locations: classpath:/static/
       cache:
         period: 3600
-      chain:
-        strategy:
-          content:
-            enabled: true
-            paths: /**
   datasource:
     url: ${DATABASE_URL}
     username: ${POSTGRES_USERNAME}
