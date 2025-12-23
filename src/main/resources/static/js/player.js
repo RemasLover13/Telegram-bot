@@ -1,22 +1,22 @@
 
 const tracks = {
     'background-music': {
-        src: '/assets/music/background-music.mp3',
+        src: '/static/assets/music/background-music.mp3',
         title: 'Расслабляющий саундтрек',
         duration: '2:30'
     },
     'track1': {
-        src: '/assets/music/track1.mp3',
+        src: '/static/assets/music/track1.mp3',
         title: 'Энергичная фоновая музыка',
         duration: '3:15'
     },
     'track2': {
-        src: '/assets/music/track2.mp3',
+        src: '/static/assets/music/track2.mp3',
         title: 'Космическая атмосфера',
         duration: '4:20'
     },
     'track3': {
-        src: '/assets/music/track3.mp3',
+        src: '/static/assets/music/track3.mp3',
         title: 'Песня для души',
         duration: '5:00'
     }
