@@ -21,10 +21,10 @@ public class OpenRouterConfig {
     @Value("${OPENROUTER_API_KEY:}")
     private String apiKey;
 
-    @Value("${OPENROUTER_BASE_URL:https://openrouter.ai/api/v1}")
+    @Value("${OPENROUTER_BASE_URL}")
     private String baseUrl;
 
-    @Value("${OPENROUTER_MODEL:xiaomi/mimo-v2-flash:free}")
+    @Value("${OPENROUTER_MODEL}")
     private String model;
 
     @Bean

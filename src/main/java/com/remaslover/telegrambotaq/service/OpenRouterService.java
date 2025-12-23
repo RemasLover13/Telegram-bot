@@ -21,10 +21,10 @@ public class OpenRouterService {
 
     private static final Logger log = LoggerFactory.getLogger(OpenRouterService.class);
 
-    @Value("${OPENROUTER_API_KEY:}")
+    @Value("${OPENROUTER_API_KEY}")
     private String apiKey;
 
-    @Value("${OPENROUTER_MODEL:xiaomi/mimo-v2-flash:free}")
+    @Value("${OPENROUTER_MODEL}")
     private String model;
 
     private final RestTemplate restTemplate;
