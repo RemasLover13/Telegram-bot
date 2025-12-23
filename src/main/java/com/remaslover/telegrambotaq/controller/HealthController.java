@@ -13,7 +13,7 @@ public class HealthController {
 
     @GetMapping("/")
     public String home() {
-        return "forward:/index.html";
+        return "forward:/home.html";
     }
 
     @GetMapping("/ping")
